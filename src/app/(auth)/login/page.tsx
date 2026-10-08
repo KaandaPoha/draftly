@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -31,8 +29,10 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
-    router.refresh();
+    // Hard redirect: guarantees the fresh session cookie is sent with the
+    // very next page request (router.refresh() alone can render a stale
+    // cached page that still thinks we're signed out).
+    window.location.href = "/";
   }
 
   return (
