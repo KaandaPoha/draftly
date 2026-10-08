@@ -1,9 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Sparkles,
@@ -11,12 +6,12 @@ import {
   CalendarRange,
   FolderOpen,
   Users,
-  Settings,
-  Menu,
-  X,
+  Settings as SettingsIcon,
   PenLine,
   LogOut,
 } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { logoutAction } from "@/app/(app)/actions";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -26,11 +21,12 @@ const NAV = [
   { href: "/planner", label: "Content Planner", icon: CalendarRange },
   { href: "/campaigns", label: "Campaigns", icon: FolderOpen },
   { href: "/profiles", label: "Brand Profiles", icon: Users },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/drafts", label: "Drafts", icon: PenLine },
+  { href: "/compare", label: "Compare", icon: MessageSquare },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = usePathname();
+function NavLinks({ pathname }: { pathname: string }) {
   return (
     <nav aria-label="Main" className="flex flex-col gap-1 px-3">
       {NAV.map(({ href, label, icon: Icon }) => {
@@ -39,7 +35,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           <Link
             key={href}
             href={href}
-            onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
@@ -70,25 +65,37 @@ function Logo() {
   );
 }
 
-export function AppShell({
+function SignOutForm() {
+  return (
+    <form action={logoutAction}>
+      <button
+        type="submit"
+        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
+      >
+        <LogOut size={15} aria-hidden /> Sign out
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Fully server-rendered shell — zero client JavaScript.
+ * The mobile menu uses <details>, which opens/closes natively in every
+ * browser without JS. Sign out is a server-action form.
+ */
+export async function AppShell({
   children,
-  userName,
+  pathname,
 }: {
   children: React.ReactNode;
-  userName?: string | null;
+  pathname: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const router = useRouter();
-
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
-  }
+  const user = await getCurrentUser();
+  const userName = user?.name ?? null;
 
   return (
     <div className="flex min-h-dvh">
-      {/* Skip link for keyboard users */}
+      {/* Skip link */}
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-4 focus:py-2 focus:text-background"
@@ -97,44 +104,38 @@ export function AppShell({
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 border-r border-line bg-surface md:flex md:flex-col">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-surface md:flex">
         <Logo />
-        <NavLinks />
+        <NavLinks pathname={pathname} />
         <div className="mt-auto flex flex-col gap-2 px-5 pb-5 pt-4">
           <p className="rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-xs leading-relaxed text-text-faint">
             Signed in as{" "}
-            <span className="font-medium text-text-muted">
-              {userName ?? "your account"}
-            </span>
+            <span className="font-medium text-text-muted">{userName ?? "your account"}</span>
           </p>
-          <button
-            type="button"
-            onClick={logout}
-            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-text-muted transition-colors hover:bg-surface-2 hover:text-text"
-          >
-            <LogOut size={15} aria-hidden /> Sign out
-          </button>
+          <SignOutForm />
         </div>
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-line bg-surface px-4 py-3 md:hidden">
-        <Logo />
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label={open ? "Close menu" : "Open menu"}
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-text-muted hover:bg-surface-2 hover:text-text"
-        >
-          {open ? <X size={20} aria-hidden /> : <Menu size={20} aria-hidden />}
-        </button>
-      </div>
-      {open && (
-        <div className="fixed inset-x-0 top-[61px] z-30 border-b border-line bg-surface pb-4 pt-2 md:hidden">
-          <NavLinks onNavigate={() => setOpen(false)} />
+      {/* Mobile top bar with native <details> menu */}
+      <details className="fixed inset-x-0 top-0 z-40 md:hidden">
+        <summary className="flex list-none items-center justify-between border-b border-line bg-surface px-4 py-3 [&::-webkit-details-marker]:hidden">
+          <Logo />
+          <span
+            aria-hidden
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-text-muted"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18M3 12h18M3 18h18" />
+            </svg>
+          </span>
+        </summary>
+        <div className="border-b border-line bg-surface pb-4 pt-2">
+          <NavLinks pathname={pathname} />
+          <div className="flex flex-col gap-2 px-5 pb-2 pt-4">
+            <SignOutForm />
+          </div>
         </div>
-      )}
+      </details>
 
       {/* Content */}
       <div className="flex min-w-0 flex-1 flex-col pt-[61px] md:pt-0">

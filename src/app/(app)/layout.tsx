@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 
-// Reads the session cookie, so every page below must render per-request.
+// Reads the session cookie — must render per-request.
 export const instant = false;
 
 /**
@@ -20,7 +21,11 @@ export default async function AppLayout({
   if (!user) redirect("/login");
   if (!user.preference) redirect("/onboarding");
 
+  // Derive the current path for nav highlighting (no client component).
+  const h = await headers();
+  const pathname = h.get("x-invoke-path") ?? h.get("x-matched-path") ?? "/";
+
   return (
-    <AppShell userName={user.name}>{children}</AppShell>
+    <AppShell pathname={pathname}>{children}</AppShell>
   );
 }
