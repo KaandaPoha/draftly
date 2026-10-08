@@ -36,12 +36,14 @@ const FORMATS = [
   { value: "captions", label: "Caption" },
   { value: "hooks", label: "Hooks" },
   { value: "hashtags", label: "Hashtags" },
-  { value: "video_script", label: "Video / Reel script" },
+  { value: "post", label: "Full post draft" },
+  { value: "reel", label: "Reel — script + storyboard" },
+  { value: "video_script", label: "Video script" },
+  { value: "animation", label: "Animation concept" },
   { value: "carousel", label: "Carousel outline" },
   { value: "image_concept", label: "Image / visual concept" },
   { value: "headline", label: "Headline" },
   { value: "cta_only", label: "Call to action" },
-  { value: "post", label: "Full post draft" },
 ];
 
 const STEP_NAMES = ["Idea", "Profile", "Audience", "Platform", "Goal", "Format"];
@@ -144,7 +146,7 @@ export default async function CreatePage({
               the draft stays generic.
             </p>
             <form action={advance} className="flex flex-col gap-5">
-              {hidden(state)}
+              {hidden(state, ["profileId"])}
               <div className="flex flex-wrap gap-2">
                 <label className="cursor-pointer">
                   <input
@@ -198,7 +200,7 @@ export default async function CreatePage({
               never assumes demographics without your input.
             </p>
             <form action={advance} className="flex flex-col gap-4">
-              {hidden(state)}
+              {hidden(state, ["audienceAge", "audienceLocation", "audienceInterests"])}
               <div className="grid gap-4 sm:grid-cols-3">
                 <label className="flex flex-col gap-1.5 text-sm">
                   Age range
@@ -241,7 +243,7 @@ export default async function CreatePage({
           <Card className="flex flex-col gap-4">
             <h2 className="font-display font-semibold">Which platform?</h2>
             <form action={advance} className="flex flex-col gap-5">
-              {hidden(state)}
+              {hidden(state, ["platform"])}
               <div className="flex flex-wrap gap-2">
                 {PLATFORMS.map((p) => (
                   <label key={p} className="cursor-pointer">
@@ -271,7 +273,7 @@ export default async function CreatePage({
           <Card className="flex flex-col gap-4">
             <h2 className="font-display font-semibold">What&rsquo;s the goal?</h2>
             <form action={advance} className="flex flex-col gap-5">
-              {hidden(state)}
+              {hidden(state, ["goal"])}
               <div className="flex flex-wrap gap-2">
                 {GOALS.map((g) => (
                   <label key={g} className="cursor-pointer">

@@ -1,16 +1,13 @@
 /**
  * Assistant engine — profile-aware responses.
  *
- * Demo mode: since no LLM key is configured, replies come from scenario
- * templates that use the user's REAL saved context (role, goals, platforms,
- * tone, profiles). Every reply is labeled as demo output in the UI.
- *
- * Real LLM integration: when AI_API_KEY/AI_PROVIDER are set, buildChatPrompt
- * produces the full prompt from the same context — the transport-agnostic
- * part is shared.
+ * Real LLM when a provider is configured, deterministic scenario templates
+ * otherwise. The reply always carries its source so the UI can label it, and
+ * a failed provider call reports why it fell back.
  */
 
 import type { UserPreferences, BrandProfile } from "@prisma/client";
+import { complete, providerConfig, LlmError } from "./llm";
 
 export type AssistantContext = {
   userName: string | null;
@@ -23,38 +20,101 @@ export type AssistantReply = {
   text: string;
   scenarios: string[]; // suggested follow-up chips
   source: "demo" | "ai";
+  /** When source is "demo" because a configured provider failed, why. */
+  notice?: string | null;
 };
 
-/* ---------- shared context block (used by demo + future LLM) ---------- */
+/* ---------- shared context block ---------- */
 
 export function buildChatPrompt(message: string, ctx: AssistantContext): string {
   const lines: string[] = [];
-  lines.push("You are Draftly's assistant, helping with content strategy.");
   if (ctx.userName) lines.push(`The user's name is ${ctx.userName}.`);
   if (ctx.preferences) {
-    lines.push(`They are a ${ctx.preferences.role ?? "creator"} whose goals are: ${ctx.preferences.goals ?? "not set"}.`);
-    lines.push(`Active platforms: ${ctx.preferences.platforms ?? "not set"}. Preferred tone: ${ctx.preferences.tone ?? "not set"}.`);
+    lines.push(
+      `They are a ${ctx.preferences.role ?? "creator"} whose goals are: ${ctx.preferences.goals ?? "not set"}.`
+    );
+    lines.push(
+      `Active platforms: ${ctx.preferences.platforms ?? "not set"}. Preferred tone: ${ctx.preferences.tone ?? "not set"}.`
+    );
   }
   if (ctx.profiles.length > 0) {
     lines.push("Their brand profiles:");
     ctx.profiles.forEach((p) => {
-      lines.push(`- ${p.name}${p.niche ? ` (${p.niche})` : ""}${p.tone ? `, tone: ${p.tone}` : ""}`);
+      lines.push(
+        `- ${p.name}${p.niche ? ` (${p.niche})` : ""}${p.tone ? `, tone: ${p.tone}` : ""}${
+          p.audience ? `, audience: ${p.audience}` : ""
+        }${p.wordsToUse ? `, words to use: ${p.wordsToUse}` : ""}`
+      );
     });
   }
   if (ctx.recentDrafts.length > 0) {
-    lines.push("Recent drafts:");
-    ctx.recentDrafts.slice(0, 5).forEach((d) => {
-      lines.push(`- ${d.title} (${d.platform})`);
+    lines.push("Their recent drafts:");
+    ctx.recentDrafts.slice(0, 6).forEach((d) => {
+      lines.push(`- ${d.title} (${d.platform}${d.goal ? `, goal: ${d.goal}` : ""})`);
     });
   }
-  lines.push(`\nUser asks: ${message}`);
+  lines.push(``);
+  lines.push(`User asks: ${message}`);
   return lines.join("\n");
 }
 
-/* ---------- demo scenarios ---------- */
+const ASSISTANT_SYSTEM = `You are Draftly's content strategist: a direct, practical social media advisor.
+
+Use the user's real context (their role, goals, platforms, tone, brand profiles and recent drafts) in your answer. Reference their actual profile and niche — never give generic advice that could apply to anyone.
+
+Rules:
+- Be concise. Use short paragraphs and tight bullets.
+- Give specific, actionable content ideas: formats, hooks, and angles.
+- Never invent statistics, benchmarks, or engagement numbers.
+- Any posting-time advice must be labelled as an estimate, since you have no access to their analytics.
+- Never claim to see live trends or real-time data — you cannot.
+- If you suggest an idea they could turn into content, end with: "Ask \"create this idea\" to load it into the studio."`;
+
+/* ---------- real LLM path ---------- */
+
+export async function assistantReply(
+  message: string,
+  ctx: AssistantContext
+): Promise<AssistantReply> {
+  const cfg = providerConfig();
+
+  if (cfg) {
+    try {
+      const text = await complete(ASSISTANT_SYSTEM, buildChatPrompt(message, ctx), {
+        maxTokens: 1200,
+      });
+      return { text, scenarios: followUps(), source: "ai" };
+    } catch (err) {
+      const notice =
+        err instanceof LlmError
+          ? err.friendly
+          : "The AI provider call failed, so Draftly answered from its built-in scenarios.";
+      return { text: demoReply(message, ctx), scenarios: followUps(), source: "demo", notice };
+    }
+  }
+
+  return {
+    text: demoReply(message, ctx),
+    scenarios: followUps(),
+    source: "demo",
+    notice: "No AI provider is configured — this is a built-in scenario answer.",
+  };
+}
+
+function followUps(): string[] {
+  return [
+    "What should I post this week?",
+    "Ideas for my audience",
+    "How do I improve my draft?",
+    "Campaign ideas",
+  ];
+}
+
+/* ---------- built-in scenarios ---------- */
 
 function weekPlan(ctx: AssistantContext): string {
-  const platform = (ctx.preferences?.platforms ?? "Instagram,LinkedIn").split(",")[0]?.trim() || "Instagram";
+  const platform =
+    (ctx.preferences?.platforms ?? "Instagram,LinkedIn").split(",")[0]?.trim() || "Instagram";
   const niche = ctx.profiles[0]?.niche ?? "your niche";
   const tone = (ctx.preferences?.tone ?? "friendly").toLowerCase();
 
@@ -81,7 +141,7 @@ function audienceIdeas(ctx: AssistantContext): string {
     `3. **Before/after transformation** — proof beats promises.`,
     `4. **Answer the objection** — take the #1 reason people don't buy/subscribe and address it head-on.`,
     ``,
-    `Ask "create this idea" on any of these and I'll set up the studio for you.`,
+    `Ask "create this idea" on any of these and the studio will set itself up.`,
   ].join("\n");
 }
 
@@ -98,7 +158,7 @@ function improveDraft(ctx: AssistantContext): string {
     `3. **Specificity beats adjectives** — replace "great quality" with a concrete detail.`,
     `4. **CTA clarity** — one action only; pick reply, save, or link, not all three.`,
     ``,
-    `Open the draft from your library and use the improvement actions — "Shorter", "More professional", "Improve the CTA" — each keeps the previous version in history.`,
+    `Open the draft and use the improvement actions — "Shorter", "More professional", "Improve the CTA" — each keeps the previous version in history.`,
   ].join("\n");
 }
 
@@ -127,12 +187,14 @@ function profileHelp(ctx: AssistantContext): string {
     p.audience ? `Audience: ${p.audience}.` : "",
     ``,
     `To improve it: add more sample posts (3–5 is ideal) and fill the "words to use" and "words to avoid" fields — every personalized draft picks them up.`,
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function fallback(message: string): string {
   return [
-    `I can help with that. In demo mode I answer a few core question types with your real context:`,
+    `Here's what I can help with right now using your real saved context:`,
     ``,
     `• "What should I post this week?" — weekly plan`,
     `• "What content works for my audience?" — ideas`,
@@ -140,37 +202,27 @@ function fallback(message: string): string {
     `• "Suggest campaign ideas" — campaign themes`,
     `• "How is my profile set up?" — profile review`,
     ``,
-    `You said: “${message}”. Connect an AI provider key in Settings to get free-form answers on anything.`,
+    `You said: “${message}”. Add an AI provider key in Settings for free-form answers on anything.`,
   ].join("\n");
 }
 
-/* ---------- router ---------- */
-
-export function assistantReply(message: string, ctx: AssistantContext): AssistantReply {
+function demoReply(message: string, ctx: AssistantContext): string {
   const m = message.toLowerCase();
 
-  let text: string;
-  let scenarios: string[] = [];
-
   if (m.includes("week") || m.includes("post this week") || m.includes("schedule")) {
-    text = weekPlan(ctx);
-    scenarios = ["Ideas for my audience", "Campaign ideas", "Review my profile"];
-  } else if (m.includes("audience") || m.includes("ideas") || m.includes("content could appeal")) {
-    text = audienceIdeas(ctx);
-    scenarios = ["What should I post this week?", "How do I improve my draft?"];
-  } else if (m.includes("improve") || m.includes("engaging") || m.includes("better") || m.includes("draft")) {
-    text = improveDraft(ctx);
-    scenarios = ["What should I post this week?", "Campaign ideas"];
-  } else if (m.includes("campaign") || m.includes("launch")) {
-    text = campaignIdeas(ctx);
-    scenarios = ["What should I post this week?", "Ideas for my audience"];
-  } else if (m.includes("profile") || m.includes("brand voice")) {
-    text = profileHelp(ctx);
-    scenarios = ["What should I post this week?", "Ideas for my audience"];
-  } else {
-    text = fallback(message);
-    scenarios = ["What should I post this week?", "Ideas for my audience", "How do I improve my draft?"];
+    return weekPlan(ctx);
   }
-
-  return { text, scenarios, source: "demo" };
+  if (m.includes("audience") || m.includes("ideas") || m.includes("content could appeal")) {
+    return audienceIdeas(ctx);
+  }
+  if (m.includes("improve") || m.includes("engaging") || m.includes("better") || m.includes("draft")) {
+    return improveDraft(ctx);
+  }
+  if (m.includes("campaign") || m.includes("launch")) {
+    return campaignIdeas(ctx);
+  }
+  if (m.includes("profile") || m.includes("brand voice")) {
+    return profileHelp(ctx);
+  }
+  return fallback(message);
 }

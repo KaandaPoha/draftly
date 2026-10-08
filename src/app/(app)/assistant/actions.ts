@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { assistantReply, buildChatPrompt, type AssistantContext } from "@/lib/assistant";
+import { assistantReply, type AssistantContext } from "@/lib/assistant";
 
 /** Send a message: stores it, generates a reply, returns to the conversation. */
 export async function sendMessage(formData: FormData) {
@@ -39,9 +39,16 @@ export async function sendMessage(formData: FormData) {
     recentDrafts,
   };
 
-  // Demo engine (or future LLM call using the same context block).
-  void buildChatPrompt(message, ctx); // built now; used when the LLM transport lands
-  const reply = assistantReply(message, ctx);
+  // Real LLM call when a provider is configured, built-in scenarios otherwise.
+  // The reply carries its own source so the UI never mislabels it.
+  const reply = await assistantReply(message, ctx);
+
+  const assistantMessage = {
+    role: "assistant",
+    content: reply.text,
+    source: reply.source,
+    notice: reply.notice ?? null,
+  };
 
   // Persist conversation.
   let convId = conversationId;
@@ -51,10 +58,7 @@ export async function sendMessage(formData: FormData) {
         userId: user.id,
         title: message.slice(0, 60),
         messages: {
-          create: [
-            { role: "user", content: message },
-            { role: "assistant", content: reply.text },
-          ],
+          create: [{ role: "user", content: message }, assistantMessage],
         },
       },
     });
@@ -68,7 +72,7 @@ export async function sendMessage(formData: FormData) {
     await prisma.chatMessage.createMany({
       data: [
         { conversationId: convId, role: "user", content: message },
-        { conversationId: convId, role: "assistant", content: reply.text },
+        { conversationId: convId, ...assistantMessage },
       ],
     });
   }

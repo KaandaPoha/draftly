@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateWithAI } from "@/lib/ai";
+import { generateContent } from "@/lib/ai";
 
 const schema = z.object({
   idea: z.string().trim().min(3, "Describe your idea first").max(2000),
@@ -20,6 +20,8 @@ const schema = z.object({
     "headline",
     "cta_only",
     "post",
+    "reel",
+    "animation",
   ]),
   variant: z.number().int().min(0).max(9).optional(),
   save: z.boolean().optional(),
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const { draft, mode } = await generateWithAI({
+  const { draft, mode, model, notice } = await generateContent({
     idea,
     profile: profile
       ? {
@@ -58,6 +60,12 @@ export async function POST(request: Request) {
           wordsToUse: profile.wordsToUse,
           wordsToAvoid: profile.wordsToAvoid,
           audience: profile.audience,
+          niche: profile.niche,
+          offerings: profile.offerings,
+          colors: profile.colors,
+          guidelines: profile.guidelines,
+          description: profile.description,
+          styleAnalysis: profile.styleAnalysis,
         }
       : null,
     audience,
@@ -84,12 +92,19 @@ export async function POST(request: Request) {
         goal,
         format,
         audience,
+        idea,
+        variant,
         isPersonalized: Boolean(profile),
         status: "draft",
+        generationMode: mode,
+        model,
+        storyboard: JSON.stringify(draft.storyboard),
+        imagePrompt: JSON.stringify(draft.artboard),
+        designSpec: JSON.stringify(draft.design),
       },
     });
     draftId = created.id;
   }
 
-  return NextResponse.json({ draft, mode, draftId });
+  return NextResponse.json({ draft, mode, model, notice, draftId });
 }

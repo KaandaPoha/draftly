@@ -47,6 +47,8 @@ export function explainDraft(input: GenerationInput, profileTone?: string | null
     hooks: "You picked the hooks format, so output is a set of alternative opening lines to test.",
     hashtags: "You picked hashtags only, so the draft focuses on a relevant tag set.",
     video_script: "You picked a video script, so the content is structured with time cues for filming.",
+    reel: "You picked a reel, so you get a spoken script plus a shot-by-shot storyboard with an animated preview.",
+    animation: "You picked an animation concept, so the output describes what moves, on which beat, and where it loops.",
     carousel: "You picked a carousel, so the content is an outline broken slide by slide.",
     image_concept: "You picked a visual concept, so the output describes composition, palette, and staging.",
     headline: "You picked a headline, so the output is a single strong title line.",

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateDraft } from "@/lib/generate";
+import { generateContent } from "@/lib/ai";
 
 /**
  * Create Studio without JavaScript.
@@ -27,6 +27,9 @@ function buildState(formData: FormData) {
     step,
     idea,
     profileId,
+    audienceAge,
+    audienceLocation,
+    audienceInterests,
     audience: [audienceAge, audienceLocation, audienceInterests]
       .filter(Boolean)
       .join(", "),
@@ -37,25 +40,27 @@ function buildState(formData: FormData) {
   };
 }
 
+/**
+ * Rebuild the wizard query string from the parsed form state.
+ *
+ * The audience fields are carried forward individually, not as the joined
+ * `audience` string, so the Audience step can round-trip what the user typed
+ * and so edits made there actually take effect.
+ */
 function toQuery(s: ReturnType<typeof buildState>, step: number) {
   const q = new URLSearchParams({
     step: String(step),
     idea: s.idea,
     profileId: s.profileId,
-    audienceAge: String(formDataGet(s, "audienceAge")),
-    audienceLocation: String(formDataGet(s, "audienceLocation")),
-    audienceInterests: String(formDataGet(s, "audienceInterests")),
+    audienceAge: s.audienceAge,
+    audienceLocation: s.audienceLocation,
+    audienceInterests: s.audienceInterests,
     platform: s.platform,
     goal: s.goal,
     format: s.format,
     variant: String(s.variant),
   });
   return `/create?${q.toString()}`;
-}
-
-// helper to re-read raw fields from the form for query building
-function formDataGet(s: ReturnType<typeof buildState>, key: string) {
-  return (s as unknown as Record<string, string>)[key] ?? "";
 }
 
 /** Advance to the next step, carrying state. */
@@ -91,7 +96,7 @@ export async function generate(formData: FormData) {
       })
     : null;
 
-  const draft = generateDraft({
+  const result = await generateContent({
     idea: s.idea,
     profile: profile
       ? {
@@ -101,6 +106,12 @@ export async function generate(formData: FormData) {
           wordsToUse: profile.wordsToUse,
           wordsToAvoid: profile.wordsToAvoid,
           audience: profile.audience,
+          niche: profile.niche,
+          offerings: profile.offerings,
+          colors: profile.colors,
+          guidelines: profile.guidelines,
+          description: profile.description,
+          styleAnalysis: profile.styleAnalysis,
         }
       : null,
     audience: s.audience || null,
@@ -109,6 +120,8 @@ export async function generate(formData: FormData) {
     format: s.format,
     variant: s.variant,
   });
+
+  const draft = result.draft;
 
   const created = await prisma.contentDraft.create({
     data: {
@@ -129,28 +142,24 @@ export async function generate(formData: FormData) {
       variant: s.variant,
       isPersonalized: Boolean(profile),
       status: "draft",
+      generationMode: result.mode,
+      model: result.model,
+      storyboard: JSON.stringify(draft.storyboard),
+      imagePrompt: JSON.stringify(draft.artboard),
+      designSpec: JSON.stringify(draft.design),
     },
   });
 
-  redirect(`/drafts/${created.id}?notice=${encodeURIComponent("Draft generated (demo mode — templates, not AI)")}`);
+  const notice = result.mode === "llm"
+    ? `Draft generated with ${result.model}`
+    : result.notice ?? "Draft generated";
+  redirect(`/drafts/${created.id}?notice=${encodeURIComponent(notice)}`);
 }
 
 /** Alternative version of the same draft. */
 export async function generateAlternative(formData: FormData) {
   const s = buildState(formData);
   const next = { ...s, variant: s.variant + 1 };
-  const q = new URLSearchParams({
-    step: "0",
-    idea: next.idea,
-    profileId: next.profileId,
-    audienceAge: String(formDataGet(next, "audienceAge")),
-    audienceLocation: String(formDataGet(next, "audienceLocation")),
-    audienceInterests: String(formDataGet(next, "audienceInterests")),
-    platform: next.platform,
-    goal: next.goal,
-    format: next.format,
-    variant: String(next.variant),
-  });
-  // Re-run generate with bumped variant by posting to the same action.
-  redirect(`/create?${q.toString()}&auto=1`);
+  // Re-run generate with the bumped variant by posting to the same action.
+  redirect(`${toQuery(next, 5)}&auto=1`);
 }

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { MessageSquare, Info, Plus, Trash2, ArrowUpRight } from "lucide-react";
+import { MessageSquare, Info, Plus, Trash2, ArrowUpRight, Sparkles } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
+import { aiConfigured } from "@/lib/llm";
 import { sendMessage, deleteConversation, createIdea } from "./actions";
 
 // Reads the session cookie and the database — render per-request.
@@ -31,6 +32,7 @@ export default async function AssistantPage({
 
   const sp = await searchParams;
   const conversationId = sp.c ? String(sp.c) : null;
+  const ai = aiConfigured();
 
   const conversations = await prisma.chatConversation.findMany({
     where: { userId: user.id },
@@ -56,7 +58,18 @@ export default async function AssistantPage({
       />
 
       <div className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-8 md:px-10">
-        <Card className="flex gap-3 border-warning/30 bg-warning/5">
+        {ai ? (
+            <Card className="flex gap-3 border-accent/30 bg-accent-soft">
+              <Sparkles size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+              <p className="text-sm leading-relaxed text-text-muted">
+                <strong className="text-text">Live AI assistant.</strong> Replies come
+                from your configured AI provider, generated server-side using your real
+                profiles, goals and recent drafts. Your API key never reaches the
+                browser.
+              </p>
+            </Card>
+          ) : (
+            <Card className="flex gap-3 border-warning/30 bg-warning/5">
           <Info size={18} className="mt-0.5 shrink-0 text-warning" aria-hidden />
           <p className="text-sm leading-relaxed text-text-muted">
             <strong className="text-text">Demo assistant.</strong> No AI key is
@@ -65,6 +78,7 @@ export default async function AssistantPage({
             chat — the interface stays the same.
           </p>
         </Card>
+          )}
 
         {/* Composer + suggestions */}
         <Card className="flex flex-col gap-4">
@@ -169,9 +183,20 @@ export default async function AssistantPage({
                   }`}
                 >
                   <span className="mb-1 block text-xs font-medium text-text-faint">
-                    {m.role === "user" ? "You" : "Assistant (demo)"}
+                    {m.role === "user"
+                        ? "You"
+                        : m.source === "ai"
+                          ? "Assistant (AI)"
+                          : m.source === "demo"
+                            ? "Assistant (built-in)"
+                            : "Assistant"}
                   </span>
                   <p className="whitespace-pre-line">{m.content}</p>
+                    {m.role !== "user" && m.notice && (
+                      <p className="mt-2 border-t border-line pt-2 text-xs text-warning">
+                        {m.notice}
+                      </p>
+                    )}
                 </div>
               ))}
             </div>
@@ -200,6 +225,7 @@ export default async function AssistantPage({
           <Badge tone="accent">Uses your real profiles</Badge>
           <Badge>Posting times are estimates</Badge>
           <Badge tone="warning">Ideas are AI-generated, not trend data</Badge>
+          {ai && <Badge tone="success">Live provider connected</Badge>}
         </div>
       </div>
     </>

@@ -1,36 +1,59 @@
 /**
- * AI provider adapter.
+ * Generation orchestrator.
  *
- * If AI_API_KEY (and AI_PROVIDER) are set in the environment, real LLM
- * generation is attempted server-side. If not configured, or the call fails,
- * generation falls back to the deterministic demo generator — and the
- * response tells the UI which mode produced the draft so we never present
- * demo output as AI output.
+ * Real LLM when a provider is configured, Draftly's built-in generator
+ * otherwise. The result always says which one produced it, and a failed LLM
+ * call reports WHY it fell back — the UI shows that reason rather than
+ * quietly pretending the output came from a model.
  */
 
 import { generateDraft, type GeneratedDraft, type GenerationInput } from "./generate";
+import { complete, extractJson, providerConfig, LlmError } from "./llm";
+import { SYSTEM_PROMPT, buildUserPrompt, coerceDraft } from "./prompt";
 
 export type GenerationResult = {
   draft: GeneratedDraft;
-  mode: "ai" | "demo";
+  mode: "llm" | "demo";
+  /** Provider model used, when mode is "llm". */
+  model: string | null;
+  /** Why we fell back to the built-in generator, when mode is "demo". */
+  notice: string | null;
 };
 
 export function aiConfigured(): boolean {
-  return Boolean(process.env.AI_API_KEY && process.env.AI_PROVIDER);
+  return providerConfig() !== null;
 }
 
-export async function generateWithAI(
-  input: GenerationInput
-): Promise<GenerationResult> {
-  if (!aiConfigured()) return { draft: generateDraft(input), mode: "demo" };
+export async function generateContent(input: GenerationInput): Promise<GenerationResult> {
+  const fallback = () => generateDraft(input);
+  const cfg = providerConfig();
+
+  if (!cfg) {
+    return {
+      draft: fallback(),
+      mode: "demo",
+      model: null,
+      notice: "Built-in generator — no AI provider is configured.",
+    };
+  }
 
   try {
-    // Real provider calls land in Phase 6 (assistant) — the structured
-    // prompt will be built from the same GenerationInput contract.
-    // For now, any configured provider still falls back to demo output
-    // rather than pretending AI generation happened.
-    return { draft: generateDraft(input), mode: "demo" };
-  } catch {
-    return { draft: generateDraft(input), mode: "demo" };
+    const raw = await complete(SYSTEM_PROMPT, buildUserPrompt(input), {
+      maxTokens: 3000,
+      json: true,
+    });
+    const parsed = extractJson<unknown>(raw);
+    return {
+      draft: coerceDraft(parsed, input, fallback()),
+      mode: "llm",
+      model: `${cfg.kind}:${cfg.model}`,
+      notice: null,
+    };
+  } catch (err) {
+    const notice =
+      err instanceof LlmError
+        ? err.friendly
+        : "The AI provider call failed. Draftly used its built-in generator instead.";
+    return { draft: fallback(), mode: "demo", model: null, notice };
   }
 }

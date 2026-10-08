@@ -34,7 +34,7 @@ export function recommend(input: Input): Recommendation[] {
 
   // 1 — formats not yet used
   const usedFormats = new Set(drafts.map((d) => d.format));
-  const allFormats = ["captions", "hooks", "video_script", "carousel", "post"];
+  const allFormats = ["captions", "hooks", "video_script", "carousel", "reel", "post"];
   const unused = allFormats.filter((f) => !usedFormats.has(f));
   if (drafts.length > 0 && unused.length > 0) {
     const label = unused[0] === "video_script" ? "a short video script" : `a ${unused[0]} draft`;

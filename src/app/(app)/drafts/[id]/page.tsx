@@ -6,11 +6,15 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { explainDraft } from "@/lib/why-draft";
 import { checkBrandSafety } from "@/lib/brand-safety";
+import { evaluateDraft } from "@/lib/quality";
 import { draftFullText } from "@/lib/export";
 import { SpeakButton } from "@/components/voice";
 import { SafetyPanel } from "./safety-panel";
+import { QualityPanel } from "./quality-panel";
+import { CreativeAssets } from "./creative-assets";
 import { acknowledgeReview } from "./export-actions";
-import { applyTransform, saveEdits, restoreVersion, deleteDraft } from "./actions";
+import { applyTransform, saveEdits, restoreVersion, deleteDraft, regenerateDraft, translateDraftAction } from "./actions";
+import { LANGUAGES } from "@/lib/translate";
 
 // Reads the session cookie and the database — render per-request.
 export const instant = false;
@@ -21,6 +25,8 @@ const TRANSFORMS: Array<{ kind: string; label: string }> = [
   { kind: "funnier", label: "Make it funnier" },
   { kind: "better_cta", label: "Improve the CTA" },
   { kind: "new_hook", label: "New hook" },
+  { kind: "adapt_linkedin", label: "Adapt for LinkedIn" },
+  { kind: "adapt_instagram", label: "Adapt for Instagram" },
 ];
 
 export default async function DraftDetailPage({
@@ -42,6 +48,24 @@ export default async function DraftDetailPage({
     include: { profile: true, versions: { orderBy: { createdAt: "desc" } } },
   });
   if (!draft) notFound();
+
+  // Transparent heuristic quality evaluation — labelled as such in the UI.
+  const quality = evaluateDraft(
+    {
+      hook: draft.hook,
+      body: draft.body,
+      caption: draft.caption,
+      cta: draft.cta,
+      hashtags: draft.hashtags,
+    },
+    {
+      platform: draft.platform,
+      goal: draft.goal ?? "",
+      format: draft.format ?? "post",
+      hasProfile: Boolean(draft.profile),
+      audience: draft.audience,
+    }
+  );
 
   // "Why This Draft?" — derived from the stored inputs.
   const why = explainDraft(
@@ -120,6 +144,21 @@ export default async function DraftDetailPage({
           <Section title="Visual direction" text={draft.visualNotes} />
         </Card>
 
+        {/* Content quality evaluation */}
+        <QualityPanel report={quality} draftId={draft.id} />
+
+        {/* Generated creative assets: artboard, animated storyboard, shot list */}
+        <CreativeAssets
+          draftId={draft.id}
+          title={draft.title}
+          format={draft.format}
+          storyboardRaw={draft.storyboard}
+          artboardRaw={draft.imagePrompt}
+          designRaw={draft.designSpec}
+          mode={draft.generationMode}
+          model={draft.model}
+        />
+
         {/* Brand safety */}
         <SafetyPanel
           expanded
@@ -194,6 +233,48 @@ export default async function DraftDetailPage({
               </form>
             ))}
           </div>
+
+          {/* Full regeneration + translation — separate because they
+              recompose the whole draft or change its language. */}
+          <div className="mt-2 flex flex-wrap items-end gap-3 border-t border-line pt-4">
+            <form action={regenerateDraft}>
+              <input type="hidden" name="id" value={draft.id} />
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-background hover:bg-accent-strong"
+              >
+                Regenerate everything (new angle)
+              </button>
+            </form>
+
+            <form action={translateDraftAction} className="flex items-end gap-2">
+              <input type="hidden" name="id" value={draft.id} />
+              <label className="flex flex-col gap-1 text-xs text-text-faint">
+                Translate into
+                <select
+                  name="language"
+                  className="h-10 rounded-lg border border-line bg-surface-2 px-3 text-sm text-text"
+                >
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center rounded-lg border border-line bg-surface-2 px-4 text-sm font-medium text-text-muted hover:border-accent hover:text-text"
+              >
+                Translate
+              </button>
+            </form>
+          </div>
+          <p className="text-xs text-text-faint">
+            Regeneration recomposes every line from your original idea. Translation
+            uses your configured AI provider; without one, it marks the draft for
+            translation rather than inventing text.
+          </p>
         </Card>
 
         {/* Manual edit */}
