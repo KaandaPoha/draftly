@@ -1,39 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useActionState } from "react";
+import { loginAction, type LoginState } from "./actions";
 
+/**
+ * Login page, driven by a server action via <form action={...}>.
+ * Works even if client JS fails to hydrate: the browser submits the form
+ * natively, the server action runs, and the redirect is real — no silent
+ * "nothing happens" failures.
+ */
 export default function LoginPage() {
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: form.get("email"),
-        password: form.get("password"),
-      }),
-    }).catch(() => null);
-    setLoading(false);
-
-    if (!res || !res.ok) {
-      const data = res ? await res.json().catch(() => null) : null;
-      setError(data?.error ?? "Something went wrong — please try again.");
-      return;
-    }
-
-    // Hard redirect: guarantees the fresh session cookie is sent with the
-    // very next page request (router.refresh() alone can render a stale
-    // cached page that still thinks we're signed out).
-    window.location.href = "/";
-  }
+  const [state, formAction, pending] = useActionState<LoginState, FormData>(
+    loginAction,
+    { error: null }
+  );
 
   return (
     <div className="rounded-xl border border-line bg-surface p-6">
@@ -44,10 +25,10 @@ export default function LoginPage() {
         Sign in to your Draftly account.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4" noValidate>
-        {error && (
+      <form action={formAction} className="mt-6 flex flex-col gap-4">
+        {state.error && (
           <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-            {error}
+            {state.error}
           </p>
         )}
 
@@ -81,10 +62,10 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={pending}
           className="mt-2 inline-flex h-10 items-center justify-center rounded-lg bg-accent text-sm font-medium text-background transition-colors hover:bg-accent-strong disabled:opacity-50"
         >
-          {loading ? "Signing in…" : "Sign in"}
+          {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
 

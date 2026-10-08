@@ -1,38 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useActionState } from "react";
+import { signupAction, type SignupState } from "./actions";
 
+/**
+ * Signup page, driven by a server action via <form action={...}> —
+ * same hydration-proof pattern as the login page.
+ */
 export default function SignupPage() {
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    const form = new FormData(e.currentTarget);
-    const res = await fetch("/api/auth/signup", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        email: form.get("email"),
-        password: form.get("password"),
-      }),
-    }).catch(() => null);
-    setLoading(false);
-
-    if (!res || !res.ok) {
-      const data = res ? await res.json().catch(() => null) : null;
-      setError(data?.error ?? "Something went wrong — please try again.");
-      return;
-    }
-
-    // Hard redirect to onboarding so the fresh session cookie is used.
-    window.location.href = "/onboarding";
-  }
+  const [state, formAction, pending] = useActionState<SignupState, FormData>(
+    signupAction,
+    { error: null }
+  );
 
   return (
     <div className="rounded-xl border border-line bg-surface p-6">
@@ -43,10 +23,10 @@ export default function SignupPage() {
         Start building content that sounds like you.
       </p>
 
-      <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-4" noValidate>
-        {error && (
+      <form action={formAction} className="mt-6 flex flex-col gap-4">
+        {state.error && (
           <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-            {error}
+            {state.error}
           </p>
         )}
 
@@ -100,10 +80,10 @@ export default function SignupPage() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={pending}
           className="mt-2 inline-flex h-10 items-center justify-center rounded-lg bg-accent text-sm font-medium text-background transition-colors hover:bg-accent-strong disabled:opacity-50"
         >
-          {loading ? "Creating account…" : "Create account"}
+          {pending ? "Creating account…" : "Create account"}
         </button>
       </form>
 
