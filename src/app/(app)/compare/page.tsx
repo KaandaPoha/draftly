@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, PrimaryButton } from "@/components/ui";
 import { compareAction } from "./actions";
+import { PLATFORMS, GOALS } from "@/lib/form-options";
 
 // Reads the session cookie and the database — render per-request.
 export const instant = false;
@@ -68,7 +69,7 @@ export default async function ComparePage({
                   name="platform"
                   className="h-10 rounded-lg border border-line bg-surface-2 px-3 text-sm outline-none focus:border-accent"
                 >
-                  {["Instagram", "LinkedIn", "YouTube", "Facebook", "X"].map((p) => (
+                  {PLATFORMS.filter((p) => p !== "Other").map((p) => (
                     <option key={p} value={p}>{p}</option>
                   ))}
                 </select>
@@ -79,7 +80,7 @@ export default async function ComparePage({
                   name="goal"
                   className="h-10 rounded-lg border border-line bg-surface-2 px-3 text-sm outline-none focus:border-accent"
                 >
-                  {["Awareness", "Engagement", "Followers", "Education", "Leads", "Sales", "Product launch"].map((g) => (
+                  {GOALS.filter((g) => g !== "Other").map((g) => (
                     <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
@@ -95,8 +96,13 @@ export default async function ComparePage({
                 >
                   <option value="post">Full post</option>
                   <option value="captions">Caption</option>
-                  <option value="video_script">Video script</option>
+                  <option value="reel">Reel — script + storyboard</option>
+                  <option value="video_script">Short-form video script</option>
                   <option value="carousel">Carousel outline</option>
+                  <option value="hooks">Hooks (5 options)</option>
+                  <option value="hashtags">Hashtag set</option>
+                  <option value="image_concept">Image / visual concept</option>
+                  <option value="animation">Animation concept</option>
                 </select>
               </label>
               <label className="flex flex-col gap-1.5 text-sm">
@@ -131,9 +137,10 @@ export default async function ComparePage({
         </Card>
 
         <p className="text-xs text-text-faint">
-          Both drafts are generated in demo mode (no AI key configured) — the
-          difference comes entirely from how much of your profile context each
-          draft is allowed to use.
+          When no AI key is configured, both drafts come from the built-in
+          generator — the difference comes entirely from how much of your
+          profile context each draft is allowed to use. With a key set, both
+          drafts are real AI generations, labelled with the model that made them.
         </p>
       </div>
     </>

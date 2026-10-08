@@ -9,6 +9,7 @@ import { transformDraft, type TransformKind } from "@/lib/transforms";
 import type { GeneratedDraft } from "@/lib/generate";
 import { generateContent } from "@/lib/ai";
 import { translateDraft, LANGUAGES } from "@/lib/translate";
+import { submitToken, once } from "@/lib/submit-guard";
 
 /** Every structured field a GeneratedDraft maps onto, for persistence. */
 function draftFields(d: GeneratedDraft) {
@@ -123,13 +124,25 @@ export async function regenerateDraft(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const draft = await ownedDraft(id);
 
+  // Optional free-text revision instruction from the draft page.
+  const instruction = String(formData.get("instruction") ?? "").trim();
+  const baseIdea = instruction
+    ? `${(draft.idea ?? "").trim()}\n\nRevision request: ${instruction}`.trim()
+    : draft.idea ?? "";
+
+  // A rapid double click must not regenerate twice.
+  const token = submitToken("regenerate", `${id}|${draft.variant ?? 0}`);
+  if (!once(token)) {
+    redirect(`/drafts/${id}?notice=${encodeURIComponent("Already regenerating — give it a few seconds")}&reason=failed`);
+  }
+
   const current = toGenerated(draft);
   const nextVariant = (draft.variant ?? 0) + 1;
 
   // Regenerate through the same pipeline as the original creation, so a
   // configured provider is used here too.
   const result = await generateContent({
-    idea: draft.idea ?? "",
+    idea: baseIdea,
     profile: draft.profile
       ? {
           name: draft.profile.name,
@@ -211,6 +224,7 @@ export async function translateDraftAction(formData: FormData) {
 const editSchema = z.object({
   hook: z.string().max(2000),
   body: z.string().max(10000),
+  caption: z.string().max(4000),
   cta: z.string().max(1000),
   hashtags: z.string().max(1000),
 });
@@ -222,6 +236,7 @@ export async function saveEdits(formData: FormData) {
   const parsed = editSchema.safeParse({
     hook: String(formData.get("hook") ?? ""),
     body: String(formData.get("body") ?? ""),
+    caption: String(formData.get("caption") ?? ""),
     cta: String(formData.get("cta") ?? ""),
     hashtags: String(formData.get("hashtags") ?? ""),
   });
@@ -240,7 +255,7 @@ export async function saveEdits(formData: FormData) {
     data: {
       hook: d.hook,
       body: d.body,
-      caption: d.body,
+      caption: d.caption,
       cta: d.cta,
       hashtags: d.hashtags,
     },

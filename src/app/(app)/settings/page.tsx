@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { PageHeader, Card, Badge, SecondaryButton } from "@/components/ui";
+import { PageHeader, Card, Badge, SecondaryButton, Tabs } from "@/components/ui";
 import { ThemeLinks } from "@/components/theme-links";
 import { providerConfig, aiConfigured, testConnection } from "@/lib/llm";
 import { testProvider } from "./actions";
@@ -20,10 +20,25 @@ export default async function SettingsPage({
   // never on page load, so opening Settings can't burn quota.
   const tested = sp.test === "1" ? await testConnection() : null;
 
+  // Tabbed layout — selected via query parameter so it works without client JS.
+  const TAB_IDS = ["ai", "appearance", "account"] as const;
+  const tab = TAB_IDS.includes(sp.tab as never) ? (sp.tab as string) : "ai";
+
   return (
     <>
       <PageHeader title="Settings" subtitle="Account, appearance, and AI provider." />
       <div className="mx-auto flex max-w-3xl flex-col gap-4 px-5 py-8 md:px-10">
+        <Tabs
+          basePath="/settings"
+          current={tab}
+          tabs={[
+            { id: "ai", label: "AI provider" },
+            { id: "appearance", label: "Appearance" },
+            { id: "account", label: "Account & data" },
+          ]}
+        />
+
+        {tab === "appearance" && (
         <Card className="flex flex-col gap-2">
           <h2 className="font-medium">Appearance</h2>
           <p className="text-sm leading-relaxed text-text-muted">
@@ -33,7 +48,9 @@ export default async function SettingsPage({
           </p>
           <ThemeLinks current={theme} />
         </Card>
+        )}
 
+        {tab === "ai" && (
         <Card className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-medium">AI provider</h2>
@@ -114,7 +131,10 @@ AI_BASE_URL=https://api.openai.com/v1`}
             </>
           )}
         </Card>
+        )}
 
+        {tab === "account" && (
+        <>
           <Card className="flex flex-col gap-2">
           <h2 className="font-medium">Account</h2>
           <p className="text-sm leading-relaxed text-text-muted">
@@ -132,6 +152,8 @@ AI_BASE_URL=https://api.openai.com/v1`}
             and never shows a post as published unless it actually was.
           </p>
         </Card>
+        </>
+        )}
       </div>
     </>
   );

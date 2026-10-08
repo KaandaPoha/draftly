@@ -123,6 +123,11 @@ model ContentDraft {
   generationMode String @default("demo")
   model          String? // provider model id when generationMode is "llm"
 
+  // Image provenance for image-to-content drafts: the upload's mime type and
+  // byte size, e.g. "image/jpeg:245760". The uploaded image itself is never
+  // stored — this is only enough metadata to label the draft truthfully.
+  sourceImage String?
+
   // Structured extras produced alongside the copy.
   storyboard   String? // JSON: shot-by-shot plan for video/reel formats
   imagePrompt  String? // JSON: artboard spec driving the SVG visual

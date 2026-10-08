@@ -7,7 +7,7 @@
  * matches our GenerationInput contract exactly.
  */
 
-import type { GenerationInput, GeneratedDraft } from "./generate";
+import type { GenerationInput, GeneratedDraft, ImageGenerationInput } from "./generate";
 import { isMovingFormat } from "./generate";
 
 export const SYSTEM_PROMPT = `You are Draftly, a senior social media content strategist and copywriter.
@@ -89,6 +89,10 @@ const FORMAT_INSTRUCTIONS: Record<string, string> = {
   post: "Write a complete, ready-to-publish post in `body`.",
   reel: "Write a vertical short-form reel plan in `body` with a spoken script and shot notes.",
   animation: "Write an animated motion-graphics concept in `body`: what moves, on what beat, and the loop point.",
+  story: "Write a 3–5 frame story sequence in `body` (frame, overlay text, why it works), ending on the CTA frame.",
+  blog: "Write the opening section of a blog post in `body`: a hook paragraph, a short outline of the sections that follow, and the first section in full.",
+  email: "Write a short email in `body`: a subject line, a preview line, and a body of at most four short paragraphs ending in the CTA.",
+  other: "Use the user's idea to choose the most useful shape for this piece, and say what shape you chose in the first line of `body`.",
 };
 
 export function buildUserPrompt(input: GenerationInput): string {
@@ -245,4 +249,86 @@ export function coerceDraft(
       motion: str(designRaw.motion, fallback.design.motion),
     },
   };
+}
+
+/**
+ * User prompt for IMAGE-BASED generation.
+ *
+ * The image itself is attached separately (see llm.completeWithImage); this
+ * text tells the model what the image is and what to do with it. Reuses the
+ * brand-voice, audience, platform and format blocks from buildUserPrompt so
+ * image drafts follow exactly the same product rules as text drafts.
+ */
+export function buildImageUserPrompt(input: ImageGenerationInput): string {
+  const moving = isMovingFormat(input.format);
+  const storyboardInstruction = moving
+    ? `Return 5–8 shots. Timecodes must be realistic for a 20–30s vertical video, starting at 0:00.
+For each shot, "shot" is camera framing and direction (be specific: lens, movement, lighting), "onScreen" is the text overlay (max 6 words), "voiceover" is the exact spoken line, "transition" is the edit between this shot and the next.`
+    : `Return 3 shots describing the still-image plan: the hero frame, a detail frame showing proof, and an end card carrying the CTA. Use "—" for timecode, "static" for transition, and "—" for voiceover.`;
+
+  return `TASK: create ${input.format.replace(/_/g, " ")} content for ${input.platform}, based on the attached image.
+
+THE IMAGE: the user uploaded the image attached to this message. Base the content on what is actually visible in it — describe, reference, or extend the real subject, product, mood or setting shown. Do not invent a different product or scene, and do not fall back to generic copy if the image is clear enough to work from.
+
+WHAT THE USER WANTS DONE WITH THE IMAGE:
+"""
+${input.instructions}
+"""
+
+${brandVoiceBlock(input.profile)}
+
+TARGET AUDIENCE (supplied by the user — do not assume anything beyond this):
+${input.audience || input.profile?.audience || "Not specified. Write for a general but specific-feeling audience; do not invent demographics."}
+
+PLATFORM: ${PLATFORM_CONSTRAINTS[input.platform] ?? input.platform}
+
+CAMPAIGN GOAL: ${input.goal}. The call to action must serve this goal specifically.
+
+TONE & LANGUAGE: write in ${input.language}, with a ${input.tone} tone.
+
+FORMAT: ${FORMAT_INSTRUCTIONS[input.format] ?? input.format}
+
+VISUAL / DESIGN:
+Also art-direct the accompanying visual. You may build on the uploaded image's palette, subject and mood, or propose how to adapt it for the platform. Describe layout, typography and motion for this platform.
+
+Return JSON with EXACTLY this shape:
+{
+  "title": "short internal title for this piece",
+  "hook": "the single strongest opening line",
+  "body": "the main content, formatted for the platform with blank lines between blocks",
+  "caption": "the ready-to-paste caption (may equal body for caption formats)",
+  "hashtags": ["#example", "#example2"],
+  "cta": "one clear call to action",
+  "visualDirection": "art-direction notes for whoever makes the visual",
+  "storyboard": [
+    {
+      "index": 1,
+      "timecode": "0:00–0:03",
+      "shot": "camera framing / direction",
+      "onScreen": "text overlay",
+      "voiceover": "spoken line",
+      "transition": "cut"
+    }
+  ],
+  "artboard": {
+    "headline": "max 6 words",
+    "subhead": "max 10 words",
+    "cta": "max 5 words",
+    "palette": { "bg": "#0f0b1e", "surface": "#1a1430", "fg": "#f4f2ff", "accent": "#8b5cf6", "accent2": "#22d3ee" },
+    "layout": "split | centered | stacked",
+    "motif": "circles | grid | waves | burst",
+    "aspect": "square | portrait | landscape",
+    "artDirection": "one sentence of art direction"
+  },
+  "design": {
+    "palette": ["#hex", "#hex", "#hex"],
+    "typography": "type treatment",
+    "layout": "layout principle",
+    "motion": "motion principle"
+  }
+}
+
+${storyboardInstruction}
+
+JSON only. No markdown fences. No commentary.`;
 }

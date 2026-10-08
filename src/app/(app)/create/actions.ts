@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateContent } from "@/lib/ai";
+import { submitToken, once } from "@/lib/submit-guard";
 
 /**
  * Create Studio without JavaScript.
@@ -18,6 +19,7 @@ function buildState(formData: FormData) {
   const audienceAge = String(formData.get("audienceAge") ?? "").slice(0, 100);
   const audienceLocation = String(formData.get("audienceLocation") ?? "").slice(0, 100);
   const audienceInterests = String(formData.get("audienceInterests") ?? "").slice(0, 200);
+  const audienceInterestsOther = String(formData.get("audienceInterestsOther") ?? "").slice(0, 200);
   const platform = String(formData.get("platform") ?? "Instagram");
   const goal = String(formData.get("goal") ?? "Awareness");
   const format = String(formData.get("format") ?? "captions");
@@ -30,7 +32,8 @@ function buildState(formData: FormData) {
     audienceAge,
     audienceLocation,
     audienceInterests,
-    audience: [audienceAge, audienceLocation, audienceInterests]
+    audienceInterestsOther,
+    audience: [audienceAge, audienceLocation, audienceInterests, audienceInterestsOther]
       .filter(Boolean)
       .join(", "),
     platform,
@@ -55,6 +58,7 @@ function toQuery(s: ReturnType<typeof buildState>, step: number) {
     audienceAge: s.audienceAge,
     audienceLocation: s.audienceLocation,
     audienceInterests: s.audienceInterests,
+    audienceInterestsOther: s.audienceInterestsOther,
     platform: s.platform,
     goal: s.goal,
     format: s.format,
@@ -95,6 +99,20 @@ export async function generate(formData: FormData) {
         where: { id: s.profileId, userId: user.id },
       })
     : null;
+
+  // A rapid double click must not generate and save twice.
+  const token = submitToken("create-generate", `${user.id}|${s.idea}|${s.platform}|${s.format}|${s.variant}`);
+  if (!once(token)) {
+    redirect(`/create?${new URLSearchParams({
+      step: "5",
+      idea: s.idea,
+      platform: s.platform,
+      goal: s.goal,
+      format: s.format,
+      variant: String(s.variant),
+      error: "duplicate",
+    })}`);
+  }
 
   const result = await generateContent({
     idea: s.idea,
@@ -152,8 +170,10 @@ export async function generate(formData: FormData) {
 
   const notice = result.mode === "llm"
     ? `Draft generated with ${result.model}`
-    : result.notice ?? "Draft generated";
-  redirect(`/drafts/${created.id}?notice=${encodeURIComponent(notice)}`);
+    : result.notice ?? "Draft generated (built-in generator)";
+  const params = new URLSearchParams({ notice });
+  if (result.mode !== "llm") params.set("reason", "fallback");
+  redirect(`/drafts/${created.id}?${params.toString()}`);
 }
 
 /** Alternative version of the same draft. */

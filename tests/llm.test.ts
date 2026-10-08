@@ -57,8 +57,7 @@ describe("provider transport (lib/llm.ts)", () => {
       const out = await complete("be a strategist", "write a caption");
       assert.equal(out, "hello");
 
-      // The mock reads the request body asynchronously, so inspect the log
-      // after the call has settled rather than capturing a live reference.
+      // The mock reads the request body asynchronously, so inspect the log      // after the call has settled rather than capturing a live reference.
       const m = mock!;
       assert.equal(m.log.length, 1);
       const sent = m.log[0];
@@ -306,6 +305,36 @@ describe("provider transport (lib/llm.ts)", () => {
           assert.ok(!String(err.friendly ?? "").includes("test-key-123"), "no key leak (friendly)");
           return true;
         });
+      });
+    });
+
+    it("raises a clear error when the provider truncates the reply (finish_reason=length)", async () => {
+      await withProvider(async () => {
+        // Simulate a max_tokens cut-off: valid JSON envelope, unfinished text.
+        install(() => ({
+          status: 200,
+          body: JSON.stringify({
+            choices: [
+              {
+                message: { role: "assistant", content: '{"title": "unfinis' },
+                finish_reason: "length",
+              },
+            ],
+          }),
+        }));
+
+        await assert.rejects(complete("s", "u"), (err: LlmError) => {
+          assert.equal(err.code, "bad_response");
+          assert.match(err.friendly ?? "", /cut short|could not read/i);
+          return true;
+        });
+      });
+    });
+
+    it("accepts a complete reply whose finish_reason is stop", async () => {
+      await withProvider(async () => {
+        install(() => ({ status: 200, body: OPENAI_OK('{"title":"ok"}') }));
+        assert.equal(await complete("s", "u"), '{"title":"ok"}');
       });
     });
   });

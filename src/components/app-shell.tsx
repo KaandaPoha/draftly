@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   LayoutDashboard,
   Sparkles,
+  Image as ImageIcon,
   MessageSquare,
   CalendarRange,
   FolderOpen,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/create", label: "Create Content", icon: Sparkles },
+  { href: "/create/image", label: "Create from Image", icon: ImageIcon },
   { href: "/assistant", label: "AI Assistant", icon: MessageSquare },
   { href: "/planner", label: "Content Planner", icon: CalendarRange },
   { href: "/campaigns", label: "Campaigns", icon: FolderOpen },

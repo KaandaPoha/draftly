@@ -8,7 +8,10 @@ const schema = z.object({
   idea: z.string().trim().min(3, "Describe your idea first").max(2000),
   profileId: z.string().optional().nullable(),
   audience: z.string().trim().max(500).optional().nullable(),
-  platform: z.enum(["Instagram", "LinkedIn", "YouTube", "Facebook", "X"]),
+  // Platforms: the wizard dropdown's list (lib/form-options.ts). The pipeline
+  // treats any platform not in PLATFORM_CONSTRAINTS generically, so the newer
+  // options (TikTok, Pinterest, …) are valid inputs, not a schema risk.
+  platform: z.string().trim().min(1).max(40),
   goal: z.string().trim().min(1).max(100),
   format: z.enum([
     "captions",
@@ -22,6 +25,10 @@ const schema = z.object({
     "post",
     "reel",
     "animation",
+    "story",
+    "blog",
+    "email",
+    "other",
   ]),
   variant: z.number().int().min(0).max(9).optional(),
   save: z.boolean().optional(),

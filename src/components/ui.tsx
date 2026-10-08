@@ -1,4 +1,7 @@
+import Link from "next/link";
+
 import { cn } from "@/lib/utils";
+import { tabHref } from "@/lib/tabs";
 
 export function Card({
   className,
@@ -59,6 +62,62 @@ export function PageHeader({
         )}
       </div>
     </header>
+  );
+}
+
+/**
+ * Pure URL builder for a tab link — see lib/tabs.ts for the shared definition.
+ */
+export { tabHref } from "@/lib/tabs";
+
+/**
+ * Server-rendered tab navigation — works without client JavaScript.
+ *
+ * Tabs are links that carry the chosen tab id in a query parameter, so the
+ * server renders the selected panel. `params` preserves any other query state
+ * (notices, wizard fields) across tab switches.
+ */
+export function Tabs({
+  tabs,
+  current,
+  tabKey = "tab",
+  params = {},
+  basePath,
+}: {
+  tabs: Array<{ id: string; label: string; badge?: number }>;
+  current: string;
+  tabKey?: string;
+  params?: Record<string, string | undefined>;
+  basePath: string;
+}) {
+  const hrefFor = (id: string) => tabHref(basePath, tabKey, params, id);
+  return (
+    <div role="tablist" aria-label="Sections" className="flex flex-wrap gap-1 border-b border-line">
+      {tabs.map((t) => {
+        const active = t.id === current;
+        return (
+          <Link
+            key={t.id}
+            href={hrefFor(t.id)}
+            role="tab"
+            aria-selected={active}
+            className={cn(
+              "-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm transition-colors",
+              active
+                ? "border-accent font-medium text-accent"
+                : "border-transparent text-text-muted hover:border-line hover:text-text"
+            )}
+          >
+            {t.label}
+            {typeof t.badge === "number" && t.badge > 0 && (
+              <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] text-text-faint">
+                {t.badge}
+              </span>
+            )}
+          </Link>
+        );
+      })}
+    </div>
   );
 }
 
@@ -162,5 +221,45 @@ export function SecondaryButton({
     >
       {children}
     </button>
+  );
+}
+
+/** Native <select> dropdown with its label — works without client JS.
+ *  `options` may be plain strings (value = label) or {value, label} pairs. */
+export function DropdownField({
+  label,
+  name,
+  options,
+  defaultValue,
+  required = false,
+}: {
+  label: string;
+  name: string;
+  options: readonly (string | { value: string; label: string })[];
+  defaultValue?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-xs text-text-faint">
+      {label}
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        required={required}
+        className="h-10 w-full rounded-lg border border-line bg-surface-2 px-3 text-sm text-text"
+      >
+        {options.map((o) =>
+          typeof o === "string" ? (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ) : (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          )
+        )}
+      </select>
+    </label>
   );
 }

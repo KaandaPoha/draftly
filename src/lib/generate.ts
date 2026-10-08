@@ -68,6 +68,15 @@ export type GenerationInput = {
   variant: number;
 };
 
+/** Input for image-based generation: a GenerationInput plus the extra
+ *  selections that only apply when an image is attached. `idea` is derived
+ *  from the user's instructions so the deterministic fallback still works. */
+export type ImageGenerationInput = GenerationInput & {
+  tone: string;
+  language: string;
+  instructions: string;
+};
+
 export type GeneratedDraft = {
   title: string;
   hook: string;

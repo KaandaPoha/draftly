@@ -5,6 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, PrimaryButton } from "@/components/ui";
 import { VoiceInput } from "@/components/voice";
 import { advance, back, generate } from "./actions";
+import {
+  PLATFORMS,
+  GOALS,
+  FORMATS,
+  AGE_RANGES,
+  INTERESTS,
+} from "@/lib/form-options";
 import type { ReactNode } from "react";
 
 // Reads the session cookie and the database — render per-request.
@@ -16,35 +23,48 @@ function hidden(state: Record<string, string>, exclude: string[] = []): ReactNod
     .map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />);
 }
 
+/** Native <select> styled like the rest of the form — works without JS.
+ *  `options` can be plain strings (value=label) or {value,label} pairs. */
+function Dropdown({
+  name,
+  options,
+  value,
+  label,
+  placeholder,
+  required = false,
+}: {
+  name: string;
+  options: readonly (string | { value: string; label: string })[];
+  value: string;
+  label: string;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1.5 text-sm">
+      {label}
+      <select
+        name={name}
+        defaultValue={value}
+        required={required}
+        className="h-10 rounded-lg border border-line bg-surface-2 px-3 text-sm outline-none focus:border-accent"
+      >
+        {placeholder && <option value="">{placeholder}</option>}
+        {options.map((o) => {
+          const v = typeof o === "string" ? o : o.value;
+          const l = typeof o === "string" ? o : o.label;
+          return <option key={v} value={v}>{l}</option>;
+        })}
+      </select>
+    </label>
+  );
+}
+
 /**
  * Create Studio — fully server-rendered wizard.
  * All state lives in query params; every control is a native form control,
  * so it works with or without client-side JavaScript.
  */
-
-const PLATFORMS = ["Instagram", "LinkedIn", "YouTube", "Facebook", "X"];
-const GOALS = [
-  "Awareness",
-  "Engagement",
-  "Followers",
-  "Education",
-  "Leads",
-  "Sales",
-  "Product launch",
-];
-const FORMATS = [
-  { value: "captions", label: "Caption" },
-  { value: "hooks", label: "Hooks" },
-  { value: "hashtags", label: "Hashtags" },
-  { value: "post", label: "Full post draft" },
-  { value: "reel", label: "Reel — script + storyboard" },
-  { value: "video_script", label: "Video script" },
-  { value: "animation", label: "Animation concept" },
-  { value: "carousel", label: "Carousel outline" },
-  { value: "image_concept", label: "Image / visual concept" },
-  { value: "headline", label: "Headline" },
-  { value: "cta_only", label: "Call to action" },
-];
 
 const STEP_NAMES = ["Idea", "Profile", "Audience", "Platform", "Goal", "Format"];
 
@@ -64,6 +84,7 @@ export default async function CreatePage({
     audienceAge: String(sp.audienceAge ?? ""),
     audienceLocation: String(sp.audienceLocation ?? ""),
     audienceInterests: String(sp.audienceInterests ?? ""),
+    audienceInterestsOther: String(sp.audienceInterestsOther ?? ""),
     platform: String(sp.platform ?? "Instagram"),
     goal: String(sp.goal ?? "Awareness"),
     format: String(sp.format ?? "captions"),
@@ -200,16 +221,20 @@ export default async function CreatePage({
               never assumes demographics without your input.
             </p>
             <form action={advance} className="flex flex-col gap-4">
-              {hidden(state, ["audienceAge", "audienceLocation", "audienceInterests"])}
+              {hidden(state, ["audienceAge", "audienceLocation", "audienceInterests", "audienceInterestsOther"])}
               <div className="grid gap-4 sm:grid-cols-3">
                 <label className="flex flex-col gap-1.5 text-sm">
                   Age range
-                  <input
+                  <select
                     name="audienceAge"
                     defaultValue={state.audienceAge}
-                    placeholder="e.g. 18–24"
-                    className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
-                  />
+                    className="h-10 rounded-lg border border-line bg-surface-2 px-3 text-sm outline-none focus:border-accent"
+                  >
+                    <option value="">Not sure / skip</option>
+                    {AGE_RANGES.map((a) => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
                 </label>
                 <label className="flex flex-col gap-1.5 text-sm">
                   Location
@@ -220,16 +245,25 @@ export default async function CreatePage({
                     className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
                   />
                 </label>
-                <label className="flex flex-col gap-1.5 text-sm">
-                  Interests
-                  <input
-                    name="audienceInterests"
-                    defaultValue={state.audienceInterests}
-                    placeholder="e.g. fitness, hostel life"
-                    className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
-                  />
-                </label>
+                <Dropdown
+                  name="audienceInterests"
+                  label="Main interest"
+                  value={state.audienceInterests}
+                  options={INTERESTS}
+                  placeholder="Pick or type below"
+                />
               </div>
+              <label className="flex flex-col gap-1.5 text-sm">
+                Other interests or details{" "}
+                <span className="text-text-faint">(optional)</span>
+                <input
+                  name="audienceInterestsOther"
+                  defaultValue={state.audienceInterestsOther}
+                  placeholder="e.g. hostel life, late-night study, street food"
+                  maxLength={200}
+                  className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
+                />
+              </label>
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
                 <PrimaryButton type="submit">Continue →</PrimaryButton>
@@ -242,24 +276,19 @@ export default async function CreatePage({
         {step === 3 && (
           <Card className="flex flex-col gap-4">
             <h2 className="font-display font-semibold">Which platform?</h2>
+            <p className="text-sm text-text-muted">
+              Draftly shapes the draft to the platform&rsquo;s style and length
+              rules — pick where this will be posted.
+            </p>
             <form action={advance} className="flex flex-col gap-5">
               {hidden(state, ["platform"])}
-              <div className="flex flex-wrap gap-2">
-                {PLATFORMS.map((p) => (
-                  <label key={p} className="cursor-pointer">
-                    <input
-                      type="radio"
-                      name="platform"
-                      value={p}
-                      defaultChecked={state.platform === p}
-                      className="peer sr-only"
-                    />
-                    <span className="block rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted peer-has-checked:border-accent peer-has-checked:bg-accent-soft peer-has-checked:text-accent">
-                      {p}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <Dropdown
+                name="platform"
+                label="Platform"
+                value={state.platform}
+                options={PLATFORMS}
+                required
+              />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
                 <PrimaryButton type="submit">Continue →</PrimaryButton>
@@ -274,22 +303,13 @@ export default async function CreatePage({
             <h2 className="font-display font-semibold">What&rsquo;s the goal?</h2>
             <form action={advance} className="flex flex-col gap-5">
               {hidden(state, ["goal"])}
-              <div className="flex flex-wrap gap-2">
-                {GOALS.map((g) => (
-                  <label key={g} className="cursor-pointer">
-                    <input
-                      type="radio"
-                      name="goal"
-                      value={g}
-                      defaultChecked={state.goal === g}
-                      className="peer sr-only"
-                    />
-                    <span className="block rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted peer-has-checked:border-accent peer-has-checked:bg-accent-soft peer-has-checked:text-accent">
-                      {g}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <Dropdown
+                name="goal"
+                label="Goal"
+                value={state.goal}
+                options={GOALS}
+                required
+              />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
                 <PrimaryButton type="submit">Continue →</PrimaryButton>
@@ -302,30 +322,30 @@ export default async function CreatePage({
         {step === 5 && (
           <Card className="flex flex-col gap-4">
             <h2 className="font-display font-semibold">Pick a format</h2>
+            <p className="text-sm text-text-muted">
+              Every format produces a structured draft — captions, scripts, and
+              visual formats also generate an image or storyboard preview.
+            </p>
             <form action={generate} className="flex flex-col gap-5">
               {hidden(state, ["format"])}
-              <div className="flex flex-wrap gap-2">
-                {FORMATS.map((f) => (
-                  <label key={f.value} className="cursor-pointer">
-                    <input
-                      type="radio"
-                      name="format"
-                      value={f.value}
-                      defaultChecked={state.format === f.value}
-                      className="peer sr-only"
-                    />
-                    <span className="block rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted peer-has-checked:border-accent peer-has-checked:bg-accent-soft peer-has-checked:text-accent">
-                      {f.label}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <Dropdown
+                name="format"
+                label="Format"
+                value={state.format}
+                options={FORMATS}
+                required
+              />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
                 <PrimaryButton type="submit">
                   ✨ Generate draft
                 </PrimaryButton>
               </div>
+              <p className="text-xs text-text-faint">
+                Generation usually takes 10–30 seconds. If it fails, the notice
+                on the next page explains why and you can retry from here —
+                failed generations never pretend to be AI drafts.
+              </p>
             </form>
           </Card>
         )}

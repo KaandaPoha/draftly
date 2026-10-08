@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { PageHeader, Card, Badge, SecondaryButton } from "@/components/ui";
+import { PageHeader, Card, Badge, SecondaryButton, Tabs } from "@/components/ui";
 import { reanalyzeProfile, deleteProfile, setStyleOverride } from "../actions";
 
 // Reads the session cookie and the database — render per-request.
@@ -35,13 +35,16 @@ type StyleAnalysisShape = {
 
 export default async function ProfileDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const { id } = await params;
+  const spTab = (await searchParams).tab;
 
   const profile = await prisma.brandProfile.findFirst({
     where: { id, userId: user.id, isTemporary: false },
@@ -62,6 +65,11 @@ export default async function ProfileDetailPage({
   ) as Array<[string, string]>;
 
   const hasSamples = profile.samplePosts.length > 0;
+
+  // Tabbed layout — selected via a query parameter so everything stays
+  // server-rendered and works without client JavaScript.
+  const TAB_IDS = ["details", "style", "samples"] as const;
+  const tab = TAB_IDS.includes(spTab as never) ? (spTab as string) : "details";
 
   return (
     <>
@@ -86,7 +94,18 @@ export default async function ProfileDetailPage({
           </form>
         </div>
 
-        {/* Details */}
+        <Tabs
+          basePath={`/profiles/${profile.id}`}
+          current={tab}
+          tabs={[
+            { id: "details", label: "Details" },
+            { id: "style", label: "Style" },
+            { id: "samples", label: "Samples", badge: profile.samplePosts.length },
+          ]}
+        />
+
+        {tab === "details" && (
+          <>
         <Card className="flex flex-col gap-3">
           <h2 className="font-display font-semibold">Profile details</h2>
           <dl className="flex flex-col gap-2 text-sm">
@@ -123,8 +142,11 @@ export default async function ProfileDetailPage({
             )}
           </dl>
         </Card>
+          </>
+        )}
 
-        {/* Style analysis */}
+        {tab === "style" && (
+          <>
         <Card className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display font-semibold">Style characteristics</h2>
@@ -206,8 +228,11 @@ export default async function ProfileDetailPage({
             );
           })}
         </Card>
+          </>
+        )}
 
-        {/* Sample posts */}
+        {tab === "samples" && (
+          <>
         <Card className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display font-semibold">
@@ -234,6 +259,8 @@ export default async function ProfileDetailPage({
             </ul>
           )}
         </Card>
+          </>
+        )}
       </div>
     </>
   );

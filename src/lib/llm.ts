@@ -47,7 +47,7 @@ export class LlmError extends Error {
       case "timeout":
         return "The AI provider took too long to respond. Draftly used its built-in generator instead.";
       case "bad_response":
-        return "The AI provider returned something Draftly could not read. It used its built-in generator instead.";
+        return "The AI provider returned something Draftly could not read. It used its built-in generator instead. Try again in a moment — the reply may have been cut short.";
       default:
         return "Could not reach the AI provider. Draftly used its built-in generator instead.";
     }
@@ -166,6 +166,124 @@ export async function complete(
   }
 
   // OpenAI-compatible
+  const body: Record<string, unknown> = {
+    model: cfg.model,
+    max_tokens: maxTokens,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+  };
+
+  const res = await fetchWithTimeout(`${cfg.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${cfg.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw classify(res.status, text.slice(0, 400));
+
+  let parsed: {
+    choices?: Array<{
+      message?: { content?: string };
+      finish_reason?: string;
+    }>;
+  };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new LlmError("Provider returned non-JSON", "bad_response");
+  }
+  const choice = parsed.choices?.[0];
+  const out = choice?.message?.content?.trim();
+  if (!out) throw new LlmError("Provider returned an empty message", "bad_response");
+
+  // A truncated reply is missing its closing brace/quote — it cannot be
+  // trusted for structured output. Surface a clear error so the caller can
+  // show an honest message instead of a confusing parse failure.
+  if (choice?.finish_reason === "length") {
+    throw new LlmError(
+      "Provider truncated the reply before it was complete",
+      "bad_response"
+    );
+  }
+
+  return out;
+}
+
+/**
+ * One completion call whose user turn carries structured content parts —
+ * text plus image data URLs — for vision models. Same provider, same key,
+ * same error handling as `complete`. The OpenAI-compatible shape (a content
+ * array of {type:"text"} and {type:"image_url"} parts) is also what Google's
+ * Gemini OpenAI-compatibility endpoint accepts.
+ */
+export async function completeWithImage(
+  system: string,
+  userText: string,
+  imageDataUrls: string | string[],
+  opts: { maxTokens?: number; json?: boolean } = {}
+): Promise<string> {
+  const cfg = providerConfig();
+  if (!cfg) throw new LlmError("AI_API_KEY is not set", "not_configured");
+
+  const maxTokens = opts.maxTokens ?? 8000;
+  const urls = Array.isArray(imageDataUrls) ? imageDataUrls : [imageDataUrls];
+  const content: Array<Record<string, unknown>> = [
+    { type: "text", text: userText },
+    ...urls.map((url) => ({ type: "image_url", image_url: { url } })),
+  ];
+
+  if (cfg.kind === "anthropic") {
+    // Anthropic Messages API image shape: base64 source blocks.
+    const blocks: Array<Record<string, unknown>> = [
+      { type: "text", text: userText },
+      ...urls.map((url) => {
+        const m = url.match(/^data:([^;,]+);base64,([\s\S]*)$/);
+        if (!m) throw new LlmError("Unsupported image encoding", "bad_response");
+        return {
+          type: "image",
+          source: { type: "base64", media_type: m[1], data: m[2] },
+        };
+      }),
+    ];
+    const res = await fetchWithTimeout(`${cfg.baseUrl}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": cfg.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        max_tokens: maxTokens,
+        system,
+        messages: [{ role: "user", content: blocks }],
+      }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw classify(res.status, text.slice(0, 400));
+    let parsed: { content?: Array<{ type: string; text?: string }> };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new LlmError("Anthropic returned non-JSON", "bad_response");
+    }
+    const out = (parsed.content ?? [])
+      .filter((c) => c.type === "text" && c.text)
+      .map((c) => c.text)
+      .join("\n")
+      .trim();
+    if (!out) throw new LlmError("Anthropic returned an empty message", "bad_response");
+    return out;
+  }
+
+  // OpenAI-compatible multimodal request
   const res = await fetchWithTimeout(`${cfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -177,7 +295,7 @@ export async function complete(
       max_tokens: maxTokens,
       messages: [
         { role: "system", content: system },
-        { role: "user", content: user },
+        { role: "user", content },
       ],
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
@@ -186,14 +304,23 @@ export async function complete(
   const text = await res.text();
   if (!res.ok) throw classify(res.status, text.slice(0, 400));
 
-  let parsed: { choices?: Array<{ message?: { content?: string } }> };
+  let parsed: {
+    choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+  };
   try {
     parsed = JSON.parse(text);
   } catch {
     throw new LlmError("Provider returned non-JSON", "bad_response");
   }
-  const out = parsed.choices?.[0]?.message?.content?.trim();
+  const choice = parsed.choices?.[0];
+  const out = choice?.message?.content?.trim();
   if (!out) throw new LlmError("Provider returned an empty message", "bad_response");
+  if (choice?.finish_reason === "length") {
+    throw new LlmError(
+      "Provider truncated the reply before it was complete",
+      "bad_response"
+    );
+  }
   return out;
 }
 

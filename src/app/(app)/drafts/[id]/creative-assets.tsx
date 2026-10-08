@@ -47,7 +47,17 @@ export function CreativeAssets({
     null
   );
 
-  if (!artboard && !storyboard.length) return null;
+  if (!artboard && !storyboard.length) {
+    return (
+      <Card className="flex flex-col gap-2">
+        <h2 className="font-display font-semibold">Generated visual</h2>
+        <p className="text-sm text-text-muted">
+          No visual assets were generated for this draft yet. Regenerate the
+          draft or use an improvement action to create visuals.
+        </p>
+      </Card>
+    );
+  }
 
   const moving = isMovingFormat(format ?? "");
   const estimate = storyboard.length ? estimateProduction(storyboard, moving) : null;
