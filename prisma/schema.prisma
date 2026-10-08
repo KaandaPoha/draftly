@@ -113,6 +113,8 @@ model ContentDraft {
   goal        String?
   format      String? // captions | hooks | video_script | carousel | ...
   audience    String?
+  idea        String? // the original user idea this draft was generated from
+  variant     Int?     @default(0) // which alternative angle produced it
   status      String   @default("draft")
   isPersonalized Boolean @default(false)
   createdAt   DateTime @default(now())
