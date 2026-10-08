@@ -1,277 +1,242 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth";
+import { selectRole, selectGoals, selectPlatforms, savePreferences } from "./actions";
+import { ROLES, GOALS, PLATFORMS, LANGUAGES, TONES } from "@/lib/onboarding-options";
 import { cn } from "@/lib/utils";
 
-const ROLES = [
-  "Influencer / Creator",
-  "Brand / Business",
-  "Startup",
-  "Small Business",
-  "Personal Brand",
-  "Individual / Student",
-  "Other",
-];
-
-const GOALS = [
-  "Increase reach",
-  "Increase engagement",
-  "Grow followers",
-  "Build brand awareness",
-  "Launch a product",
-  "Generate leads",
-  "Increase sales",
-  "Publish consistently",
-];
-
-const PLATFORMS = ["Instagram", "LinkedIn", "YouTube", "Facebook", "X"];
-
-const LANGUAGES = ["English", "Hindi", "Hinglish", "Spanish", "German", "Other"];
-
-const TONES = [
-  "Friendly & casual",
-  "Professional & formal",
-  "Bold & punchy",
-  "Warm & storytelling",
-  "Witty & playful",
-  "Minimal & direct",
-];
-
-function Chip({
-  selected,
-  onClick,
-  children,
+/**
+ * Onboarding wizard — works entirely without JavaScript.
+ * Steps are plain forms; every option is a native submit button or
+ * checkbox. Progress travels in the URL so refresh/back behave sanely.
+ */
+export default async function OnboardingPage({
+  searchParams,
 }: {
-  selected: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={selected}
-      className={cn(
-        "rounded-full border px-4 py-2 text-sm transition-colors",
-        selected
-          ? "border-accent bg-accent-soft text-accent font-medium"
-          : "border-line bg-surface-2 text-text-muted hover:text-text"
-      )}
-    >
-      {children}
-    </button>
-  );
-}
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
-export default function OnboardingPage() {
-  const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const sp = await searchParams;
+  const step = Math.min(3, Math.max(0, parseInt(String(sp.step ?? "0"), 10) || 0));
+  const errorKey = sp.error ? String(sp.error) : null;
 
-  const [role, setRole] = useState<string | null>(null);
-  const [goals, setGoals] = useState<string[]>([]);
-  const [platforms, setPlatforms] = useState<string[]>([]);
-  const [language, setLanguage] = useState("English");
-  const [tone, setTone] = useState<string | null>(null);
+  const role = sp.role ? String(sp.role) : "";
+  const goals = sp.goals ? String(sp.goals).split(",").filter(Boolean) : [];
+  const platforms = sp.platforms ? String(sp.platforms).split(",").filter(Boolean) : [];
 
-  const steps = ["Who you are", "Your goals", "Your platforms", "Language & tone"];
-  const totalSteps = steps.length;
-
-  function toggle(list: string[], setList: (v: string[]) => void, item: string) {
-    setList(
-      list.includes(item) ? list.filter((v) => v !== item) : [...list, item]
-    );
-  }
-
-  async function finish() {
-    setError(null);
-    setSaving(true);
-    const res = await fetch("/api/onboarding", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, goals, platforms, language, tone }),
-    }).catch(() => null);
-    setSaving(false);
-
-    if (!res || !res.ok) {
-      const data = res ? await res.json().catch(() => null) : null;
-      setError(data?.error ?? "Could not save — please try again.");
-      return;
-    }
-
-    router.push("/");
-    router.refresh();
-  }
-
-  const canContinue =
-    (step === 0 && role) ||
-    (step === 1 && goals.length > 0) ||
-    (step === 2 && platforms.length > 0) ||
-    step === 3;
+  const firstName = user.name?.split(" ")[0] ?? "there";
 
   return (
-    <div className="mx-auto w-full max-w-xl px-5 py-12 md:py-20">
+    <div className="mx-auto w-full max-w-2xl px-5 py-12 md:py-16">
       {/* Progress */}
-      <ol className="mb-10 flex items-center gap-2" aria-label="Onboarding progress">
-        {steps.map((label, i) => (
-          <li key={label} className="flex flex-1 flex-col gap-1.5">
-            <span
-              className={cn(
-                "h-1 rounded-full",
-                i < step ? "bg-success" : i === step ? "bg-accent" : "bg-line"
-              )}
-            />
-            <span
-              className={cn(
-                "text-xs",
-                i === step ? "font-medium text-text" : "text-text-faint"
-              )}
-            >
-              {label}
-            </span>
-          </li>
-        ))}
+      <ol className="mb-8 flex items-center gap-2" aria-label="Onboarding progress">
+        {["Who you are", "Your goals", "Your platforms", "Language & tone"].map(
+          (label, i) => (
+            <li key={label} className="flex flex-1 flex-col gap-1.5">
+              <span
+                className={cn(
+                  "h-1 rounded-full",
+                  i < step ? "bg-success" : i === step ? "bg-accent" : "bg-line"
+                )}
+              />
+              <span
+                className={cn(
+                  "text-xs",
+                  i === step ? "font-medium text-text" : "text-text-faint"
+                )}
+              >
+                {label}
+              </span>
+            </li>
+          )
+        )}
       </ol>
 
-      <div className="rounded-xl border border-line bg-surface p-6 md:p-8">
-        {step === 0 && (
-          <>
-            <h1 className="font-display text-xl font-semibold tracking-tight">
-              Who are you?
-            </h1>
-            <p className="mt-1 text-sm text-text-muted">
-              This shapes what Draftly recommends for you.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {ROLES.map((r) => (
-                <Chip key={r} selected={role === r} onClick={() => setRole(r)}>
-                  {r}
-                </Chip>
-              ))}
-            </div>
-          </>
-        )}
-
-        {step === 1 && (
-          <>
-            <h1 className="font-display text-xl font-semibold tracking-tight">
-              What do you want to achieve?
-            </h1>
-            <p className="mt-1 text-sm text-text-muted">Pick all that apply.</p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {GOALS.map((g) => (
-                <Chip
-                  key={g}
-                  selected={goals.includes(g)}
-                  onClick={() => toggle(goals, setGoals, g)}
-                >
-                  {g}
-                </Chip>
-              ))}
-            </div>
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            <h1 className="font-display text-xl font-semibold tracking-tight">
-              Which platforms do you use?
-            </h1>
-            <p className="mt-1 text-sm text-text-muted">Pick all that apply.</p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {PLATFORMS.map((p) => (
-                <Chip
-                  key={p}
-                  selected={platforms.includes(p)}
-                  onClick={() => toggle(platforms, setPlatforms, p)}
-                >
-                  {p}
-                </Chip>
-              ))}
-            </div>
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <h1 className="font-display text-xl font-semibold tracking-tight">
-              Language & tone
-            </h1>
-            <p className="mt-1 text-sm text-text-muted">
-              You can change these any time in Settings.
-            </p>
-
-            <fieldset className="mt-6">
-              <legend className="text-sm font-medium">Preferred language</legend>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {LANGUAGES.map((l) => (
-                  <Chip key={l} selected={language === l} onClick={() => setLanguage(l)}>
-                    {l}
-                  </Chip>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset className="mt-6">
-              <legend className="text-sm font-medium">Preferred tone</legend>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {TONES.map((t) => (
-                  <Chip key={t} selected={tone === t} onClick={() => setTone(t)}>
-                    {t}
-                  </Chip>
-                ))}
-              </div>
-            </fieldset>
-          </>
-        )}
-
-        {error && (
-          <p role="alert" className="mt-5 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
-            {error}
+      {/* Step 0 — role */}
+      {step === 0 && (
+        <div className="rounded-xl border border-line bg-surface p-6 md:p-8">
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            Who are you, {firstName}?
+          </h1>
+          <p className="mt-1 text-sm text-text-muted">
+            This shapes what Draftly recommends for you.
           </p>
-        )}
-
-        {/* Controls */}
-        <div className="mt-8 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm text-text-muted hover:text-text disabled:opacity-40"
-          >
-            <ArrowLeft size={16} aria-hidden /> Back
-          </button>
-
-          {step < totalSteps - 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => s + 1)}
-              disabled={!canContinue}
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-medium text-background transition-colors hover:bg-accent-strong disabled:opacity-50"
-            >
-              Continue <ArrowRight size={16} aria-hidden />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={finish}
-              disabled={!tone || saving}
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-medium text-background transition-colors hover:bg-accent-strong disabled:opacity-50"
-            >
-              {saving ? (
-                "Saving…"
-              ) : (
-                <>
-                  Finish <Check size={16} aria-hidden />
-                </>
-              )}
-            </button>
-          )}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {ROLES.map((r) => (
+              <form key={r} action={selectRole}>
+                <input type="hidden" name="role" value={r} />
+                <button
+                  type="submit"
+                  className="rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted transition-colors hover:border-accent hover:text-text"
+                >
+                  {r}
+                </button>
+              </form>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Step 1 — goals */}
+      {step === 1 && (
+        <div className="rounded-xl border border-line bg-surface p-6 md:p-8">
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            What do you want to achieve?
+          </h1>
+          <p className="mt-1 text-sm text-text-muted">Pick all that apply.</p>
+          {errorKey === "goals" && (
+            <p role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+              Choose at least one goal.
+            </p>
+          )}
+          <form action={selectGoals} className="mt-6 flex flex-col gap-5">
+            <input type="hidden" name="role" value={role} />
+            <div className="flex flex-wrap gap-3">
+              {GOALS.map((g) => (
+                <label
+                  key={g}
+                  className="flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted has-checked:border-accent has-checked:bg-accent-soft has-checked:text-accent"
+                >
+                  <input type="checkbox" name="goals" value={g} className="accent-[var(--accent)]" />
+                  {g}
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
+              <a
+                href={`/onboarding?step=0`}
+                className="rounded-lg px-3 py-2 text-sm text-text-muted hover:text-text"
+              >
+                Back
+              </a>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-medium text-background transition-colors hover:bg-accent-strong"
+              >
+                Continue →
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Step 2 — platforms */}
+      {step === 2 && (
+        <div className="rounded-xl border border-line bg-surface p-6 md:p-8">
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            Which platforms do you use?
+          </h1>
+          <p className="mt-1 text-sm text-text-muted">Pick all that apply.</p>
+          {errorKey === "platforms" && (
+            <p role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+              Choose at least one platform.
+            </p>
+          )}
+          <form action={selectPlatforms} className="mt-6 flex flex-col gap-5">
+            <input type="hidden" name="role" value={role} />
+            <input type="hidden" name="goals" value={goals.join(",")} />
+            <div className="flex flex-wrap gap-3">
+              {PLATFORMS.map((p) => (
+                <label
+                  key={p}
+                  className="flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted has-checked:border-accent has-checked:bg-accent-soft has-checked:text-accent"
+                >
+                  <input type="checkbox" name="platforms" value={p} className="accent-[var(--accent)]" />
+                  {p}
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
+              <a
+                href={`/onboarding?step=1&role=${encodeURIComponent(role)}`}
+                className="rounded-lg px-3 py-2 text-sm text-text-muted hover:text-text"
+              >
+                Back
+              </a>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-medium text-background transition-colors hover:bg-accent-strong"
+              >
+                Continue →
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Step 3 — language & tone + finish */}
+      {step === 3 && (
+        <div className="rounded-xl border border-line bg-surface p-6 md:p-8">
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            Language & tone
+          </h1>
+          <p className="mt-1 text-sm text-text-muted">
+            Last step — you can change these any time in Settings.
+          </p>
+          {errorKey === "finish" && (
+            <p role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+              Choose a language and a tone to finish.
+            </p>
+          )}
+          <form action={savePreferences} className="mt-6 flex flex-col gap-6">
+            <input type="hidden" name="role" value={role} />
+            <input type="hidden" name="goals" value={goals.join(",")} />
+            <input type="hidden" name="platforms" value={platforms.join(",")} />
+
+            <fieldset>
+              <legend className="text-sm font-medium">Preferred language</legend>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {LANGUAGES.map((l) => (
+                  <label
+                    key={l}
+                    className="flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted has-checked:border-accent has-checked:bg-accent-soft has-checked:text-accent"
+                  >
+                    <input
+                      type="radio"
+                      name="language"
+                      value={l}
+                      defaultChecked={l === "English"}
+                      className="accent-[var(--accent)]"
+                    />
+                    {l}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="text-sm font-medium">Preferred tone</legend>
+              <div className="mt-3 flex flex-wrap gap-3">
+                {TONES.map((t) => (
+                  <label
+                    key={t}
+                    className="flex cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted has-checked:border-accent has-checked:bg-accent-soft has-checked:text-accent"
+                  >
+                    <input type="radio" name="tone" value={t} className="accent-[var(--accent)]" />
+                    {t}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="flex items-center justify-between">
+              <a
+                href={`/onboarding?step=2&role=${encodeURIComponent(role)}&goals=${encodeURIComponent(goals.join(","))}`}
+                className="rounded-lg px-3 py-2 text-sm text-text-muted hover:text-text"
+              >
+                Back
+              </a>
+              <button
+                type="submit"
+                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-medium text-background transition-colors hover:bg-accent-strong"
+              >
+                Finish ✓
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
