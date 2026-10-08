@@ -5,6 +5,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { explainDraft } from "@/lib/why-draft";
+import { checkBrandSafety } from "@/lib/brand-safety";
+import { draftFullText } from "@/lib/export";
+import { SafetyPanel } from "./safety-panel";
+import { acknowledgeReview } from "./export-actions";
 import { applyTransform, saveEdits, restoreVersion, deleteDraft } from "./actions";
 
 const TRANSFORMS: Array<{ kind: string; label: string }> = [
@@ -106,6 +110,59 @@ export default async function DraftDetailPage({
           <Section title="Call to action" text={draft.cta} />
           <Section title="Hashtags" text={draft.hashtags} mono />
           <Section title="Visual direction" text={draft.visualNotes} />
+        </Card>
+
+        {/* Brand safety */}
+        <SafetyPanel
+          expanded
+          report={checkBrandSafety(draftFullText(draft), {
+            wordsToAvoid: draft.profile?.wordsToAvoid ?? null,
+          })}
+        />
+
+        {/* Acknowledge review */}
+        <Card className="flex items-center justify-between gap-3">
+          <p className="text-sm text-text-muted">
+            Reviewed the safety findings and accept the draft as-is?
+          </p>
+          <form action={acknowledgeReview}>
+            <input type="hidden" name="id" value={draft.id} />
+            <button
+              type="submit"
+              className="inline-flex h-9 items-center rounded-lg border border-success/40 px-3 text-sm font-medium text-success hover:bg-success/10"
+            >
+              Acknowledge review
+            </button>
+          </form>
+        </Card>
+
+        {/* Export */}
+        <Card className="flex flex-col gap-3">
+          <h2 className="font-display font-semibold">Export</h2>
+          <p className="text-sm text-text-muted">
+            Download the full draft as a file — no platform connection needed.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { format: "markdown", label: "Markdown (.md)" },
+              { format: "json", label: "JSON (.json)" },
+              { format: "text", label: "Plain text (.txt)" },
+            ].map((f) => (
+              <a
+                key={f.format}
+                href={`/api/drafts/${draft.id}/export?format=${f.format}`}
+                className="rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted hover:border-accent hover:text-text"
+              >
+                {f.label}
+              </a>
+            ))}
+            <Link
+              href={`/preview?draft=${draft.id}`}
+              className="rounded-full border border-accent bg-accent-soft px-4 py-2 text-sm font-medium text-accent hover:bg-accent hover:text-background"
+            >
+              Publishing preview →
+            </Link>
+          </div>
         </Card>
 
         {/* Transformations */}
