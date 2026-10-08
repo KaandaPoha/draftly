@@ -1,0 +1,161 @@
+// Draftly data model — Phase 1 foundation.
+// SQLite for the MVP (single file, zero setup). Swap the datasource
+// provider to "postgresql" later; the schema itself stays the same.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  preference   UserPreferences?
+  sessions     Session[]
+  profiles     BrandProfile[]
+  campaigns    Campaign[]
+  drafts       ContentDraft[]
+  conversations ChatConversation[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model UserPreferences {
+  id            String  @id @default(cuid())
+  userId        String  @unique
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role          String? // Influencer, Brand, Startup, ...
+  goals         String? // comma-separated goals
+  platforms     String? // comma-separated platforms
+  language      String?
+  tone          String?
+}
+
+model BrandProfile {
+  id          String  @id @default(cuid())
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  niche       String?
+  offerings   String? // products or services
+  audience    String?
+  platforms   String?
+  language    String?
+  tone        String?
+  wordsToUse  String?
+  wordsToAvoid String?
+  guidelines  String?
+  colors      String?
+  isTemporary Boolean @default(false)
+  styleAnalysis String? // JSON: heuristic analysis of sample posts (AI-inferred)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  samplePosts SamplePost[]
+  drafts      ContentDraft[]
+}
+
+model SamplePost {
+  id            String @id @default(cuid())
+  profileId     String
+  profile       BrandProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  content       String
+  source        String  @default("pasted") // pasted | uploaded
+  createdAt     DateTime @default(now())
+}
+
+model Campaign {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime @default(now())
+
+  drafts ContentDraft[]
+}
+
+// status: draft | ready | scheduled | published
+model ContentDraft {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileId   String?
+  profile     BrandProfile? @relation(fields: [profileId], references: [id])
+  campaignId  String?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  title       String
+  hook        String?
+  body        String?
+  caption     String?
+  hashtags    String?
+  cta         String?
+  visualNotes String?
+  platform    String
+  goal        String?
+  format      String? // captions | hooks | video_script | carousel | ...
+  audience    String?
+  status      String   @default("draft")
+  isPersonalized Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions DraftVersion[]
+}
+
+model DraftVersion {
+  id        String   @id @default(cuid())
+  draftId   String
+  draft     ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  label     String   // e.g. "original", "shorter", "more professional"
+  content   String   // JSON snapshot of the draft fields
+  createdAt DateTime @default(now())
+}
+
+model ChatConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime @default(now())
+
+  messages  ChatMessage[]
+}
+
+model ChatMessage {
+  id              String  @id @default(cuid())
+  conversationId  String
+  conversation    ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            String // user | assistant
+  content         String
+  createdAt       DateTime @default(now())
+}
+
+// status: draft | ready | scheduled | published
+model CalendarEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  draftId   String?
+  platform  String
+  scheduledFor DateTime
+  status    String   @default("draft")
+  createdAt DateTime @default(now())
+}
