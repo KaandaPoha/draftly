@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, PrimaryButton } from "@/components/ui";
 import { compareAction } from "./actions";
 
+// Reads the session cookie and the database — render per-request.
+export const instant = false;
+
 export default async function ComparePage({
   searchParams,
 }: {

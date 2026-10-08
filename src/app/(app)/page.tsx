@@ -6,6 +6,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { recommend, suggestedSlots } from "@/lib/recommendations";
 
+// Reads the session and the database — render per-request (no caching).
+export const instant = false;
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");

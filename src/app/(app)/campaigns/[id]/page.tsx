@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import { setDraftCampaign } from "../actions";
 
+// Reads the session cookie and the database — render per-request.
+export const instant = false;
+
 export default async function CampaignDetailPage({
   params,
 }: {

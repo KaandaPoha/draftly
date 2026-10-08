@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { explainDraft } from "@/lib/why-draft";
 
+// Reads the session cookie and the database — render per-request.
+export const instant = false;
+
 export default async function CompareResultPage({
   params,
 }: {

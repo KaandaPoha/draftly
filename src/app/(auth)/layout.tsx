@@ -1,5 +1,9 @@
 import { PenLine } from "lucide-react";
 
+// The root layout reads the theme cookie per-request; keep auth pages
+// blocking rather than streaming a shell.
+export const instant = false;
+
 export default function AuthLayout({
   children,
 }: {

@@ -6,6 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { sendMessage, deleteConversation, createIdea } from "./actions";
 
+// Reads the session cookie and the database — render per-request.
+export const instant = false;
+
 const STARTERS = [
   "What should my brand post this week?",
   "What content could appeal to my audience?",

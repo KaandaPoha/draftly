@@ -7,9 +7,13 @@ import { PageHeader, Card, Badge } from "@/components/ui";
 import { explainDraft } from "@/lib/why-draft";
 import { checkBrandSafety } from "@/lib/brand-safety";
 import { draftFullText } from "@/lib/export";
+import { SpeakButton } from "@/components/voice";
 import { SafetyPanel } from "./safety-panel";
 import { acknowledgeReview } from "./export-actions";
 import { applyTransform, saveEdits, restoreVersion, deleteDraft } from "./actions";
+
+// Reads the session cookie and the database — render per-request.
+export const instant = false;
 
 const TRANSFORMS: Array<{ kind: string; label: string }> = [
   { kind: "shorter", label: "Make it shorter" },
@@ -95,14 +99,18 @@ export default async function DraftDetailPage({
 
         {/* Current content */}
         <Card className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-2">
-            {draft.profile ? (
-              <Badge tone="accent">Profile: {draft.profile.name}</Badge>
-            ) : (
-              <Badge tone="warning">Generic draft</Badge>
-            )}
-            {draft.goal && <Badge>Goal: {draft.goal}</Badge>}
-            {draft.audience && <Badge>Audience: {draft.audience}</Badge>}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-2">
+              {draft.profile ? (
+                <Badge tone="accent">Profile: {draft.profile.name}</Badge>
+              ) : (
+                <Badge tone="warning">Generic draft</Badge>
+              )}
+              {draft.goal && <Badge>Goal: {draft.goal}</Badge>}
+              {draft.audience && <Badge>Audience: {draft.audience}</Badge>}
+            </div>
+            {/* Optional: read the draft aloud (browser TTS, hidden if unsupported) */}
+            <SpeakButton text={`${draft.hook ?? ""}. ${draft.body ?? ""} ${draft.cta ?? ""}`} />
           </div>
 
           <Section title="Hook" text={draft.hook} />

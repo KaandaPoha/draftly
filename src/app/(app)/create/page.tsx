@@ -3,8 +3,12 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, PrimaryButton } from "@/components/ui";
+import { VoiceInput } from "@/components/voice";
 import { advance, back, generate } from "./actions";
 import type { ReactNode } from "react";
+
+// Reads the session cookie and the database — render per-request.
+export const instant = false;
 
 function hidden(state: Record<string, string>, exclude: string[] = []): ReactNode {
   return Object.entries(state)
@@ -113,6 +117,7 @@ export default async function CreatePage({
             <form action={advance} className="flex flex-col gap-4">
               {hidden(state, ["idea"])}
               <textarea
+                id="idea-input"
                 name="idea"
                 rows={4}
                 required
@@ -122,6 +127,7 @@ export default async function CreatePage({
                 placeholder='e.g. "We are launching a new chocolate drink for college students."'
                 className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
               />
+              <VoiceInput targetId="idea-input" label="Dictate your idea" />
               <div className="flex justify-end">
                 <PrimaryButton type="submit">Continue →</PrimaryButton>
               </div>
