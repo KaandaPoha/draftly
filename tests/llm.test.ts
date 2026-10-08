@@ -247,4 +247,66 @@ describe("provider transport (lib/llm.ts)", () => {
       });
     });
   });
+
+  describe("Gemini via the OpenAI-compatible endpoint", () => {
+    /**
+     * Gemini exposes an OpenAI-compatible /chat/completions API, so it is
+     * reached with the SAME adapter — just different settings. The
+     * GEMINI_ENV values are the ones documented in .env.example; they must
+     * flow through to the existing transport unchanged.
+     */
+    const GEMINI_ENV: Record<string, string> = {
+      AI_PROVIDER: "openai",
+      AI_API_KEY: "test-key-123",
+      AI_MODEL: "gemini-3.8-flash",
+      AI_BASE_URL: "https://generativelanguage.googleapis.com/v1beta/openai",
+    };
+
+    it("routes Gemini settings through the existing openai adapter", async () => {
+      await withEnv(GEMINI_ENV, async () => {
+        install(() => ({ status: 200, body: OPENAI_OK("gemini says hi") }));
+
+        const out = await complete("system", "user");
+        assert.equal(out, "gemini says hi");
+
+        const req = mock!.log[0];
+        assert.equal(
+          req.url,
+          "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+          "the base URL must get /chat/completions appended"
+        );
+        assert.equal(req.method, "POST");
+        assert.equal(req.headers.authorization, "Bearer test-key-123");
+        assert.equal((req.body as { model?: string }).model, "gemini-3.8-flash");
+      });
+    });
+
+    it("keeps demo mode when no credentials are set, regardless of provider", async () => {
+      await withEnv({ ...GEMINI_ENV, AI_API_KEY: undefined }, async () => {
+        install(() => {
+          throw new Error("network must not be reached without a key");
+        });
+        await assert.rejects(complete("s", "u"), (err: LlmError) => {
+          assert.equal(err.code, "not_configured");
+          return true;
+        });
+      });
+    });
+
+    it("propagates Gemini auth failures as a useful, key-free error", async () => {
+      await withEnv(GEMINI_ENV, async () => {
+        install(() => ({
+          status: 401,
+          body: JSON.stringify({ error: { message: "API key not valid" } }),
+        }));
+
+        await assert.rejects(complete("s", "u"), (err: LlmError) => {
+          assert.equal(err.code, "auth");
+          assert.ok(!String(err.message).includes("test-key-123"), "no key leak");
+          assert.ok(!String(err.friendly ?? "").includes("test-key-123"), "no key leak (friendly)");
+          return true;
+        });
+      });
+    });
+  });
 });
