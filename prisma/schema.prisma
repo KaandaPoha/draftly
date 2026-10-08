@@ -121,6 +121,7 @@ model ContentDraft {
   updatedAt   DateTime @updatedAt
 
   versions DraftVersion[]
+  calendarEntries CalendarEntry[]
 }
 
 model DraftVersion {
@@ -157,6 +158,7 @@ model CalendarEntry {
   id        String   @id @default(cuid())
   userId    String
   draftId   String?
+  draft     ContentDraft? @relation(fields: [draftId], references: [id])
   platform  String
   scheduledFor DateTime
   status    String   @default("draft")

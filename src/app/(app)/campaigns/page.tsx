@@ -1,51 +1,150 @@
-import { PageHeader, StatTile, Card, Badge } from "@/components/ui";
+// Per-request rendering (cookies + DB).
+export const instant = false;
 
-export default function CampaignsPage() {
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
+import { createCampaign, deleteCampaign } from "./actions";
+
+export default async function CampaignsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const sp = await searchParams;
+  const error = sp.error ? String(sp.error) : null;
+
+  const campaigns = await prisma.campaign.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    include: {
+      drafts: { select: { id: true, platform: true, status: true } },
+    },
+  });
+
   return (
     <>
       <PageHeader
-        title="Campaigns & History"
-        subtitle="Group drafts into campaigns and track their progress. Full campaign management arrives in Phase 7."
+        title="Campaigns"
+        subtitle="Group drafts into campaigns and track their progress."
       />
-      <div className="mx-auto flex max-w-4xl flex-col gap-8 px-5 py-8 md:px-10">
-        <div className="grid grid-cols-3 gap-4">
-          <StatTile label="Active" value="2" hint="Campaigns running" />
-          <StatTile label="Drafts" value="12" hint="Across all campaigns" />
-          <StatTile label="Published" value="0" hint="Via Draftly (demo)" />
-        </div>
+
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-5 py-8 md:px-10">
+        {/* New campaign form */}
+        <Card className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <Plus size={16} className="text-accent" aria-hidden />
+            <h2 className="font-display font-semibold">New campaign</h2>
+          </div>
+          {error === "name" && (
+            <p role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
+              Give the campaign a name.
+            </p>
+          )}
+          <form action={createCampaign} className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <label className="flex flex-col gap-1.5 text-sm sm:col-span-1">
+                Name *
+                <input
+                  name="name"
+                  required
+                  maxLength={120}
+                  placeholder="e.g. Protein drink launch"
+                  className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                Start date
+                <input
+                  name="startDate"
+                  type="date"
+                  className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                End date
+                <input
+                  name="endDate"
+                  type="date"
+                  className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              className="self-start inline-flex h-10 items-center rounded-lg bg-accent px-4 text-sm font-medium text-background hover:bg-accent-strong"
+            >
+              Create campaign
+            </button>
+          </form>
+        </Card>
+
+        {/* List */}
+        {campaigns.length === 0 && (
+          <EmptyState
+            title="No campaigns yet"
+            description="Create a campaign to group related drafts — useful for launches and content series."
+          />
+        )}
 
         <div className="flex flex-col gap-3">
-          {[
-            {
-              name: "Protein drink launch",
-              detail: "6 drafts · Instagram + YouTube · Oct 10 – Oct 24",
-              status: "Active",
-            },
-            {
-              name: "Carbon-neutral packaging story",
-              detail: "3 drafts · LinkedIn · Oct 5 – Oct 12",
-              status: "Active",
-            },
-            {
-              name: "Meal-prep myth series",
-              detail: "5 drafts · Instagram · Sep 1 – Sep 30",
-              status: "Completed",
-            },
-          ].map((c) => (
-            <Card key={c.name} className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="font-medium">{c.name}</h2>
-                <p className="mt-0.5 text-sm text-text-muted">{c.detail}</p>
-              </div>
-              <Badge tone={c.status === "Active" ? "accent" : "neutral"}>
-                {c.status}
-              </Badge>
-            </Card>
-          ))}
+          {campaigns.map((c) => {
+            const counts = c.drafts.reduce(
+              (acc, d) => {
+                acc[d.status] = (acc[d.status] ?? 0) + 1;
+                return acc;
+              },
+              {} as Record<string, number>
+            );
+            const active =
+              (!c.startDate || c.startDate <= new Date()) &&
+              (!c.endDate || c.endDate >= new Date());
+            return (
+              <Card key={c.id} className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <Link href={`/campaigns/${c.id}`} className="min-w-0">
+                    <h2 className="font-medium hover:text-accent">{c.name}</h2>
+                    <p className="text-sm text-text-muted">
+                      {c.drafts.length} draft{c.drafts.length === 1 ? "" : "s"}
+                      {c.startDate ? ` · from ${c.startDate.toLocaleDateString()}` : ""}
+                      {c.endDate ? ` to ${c.endDate.toLocaleDateString()}` : ""}
+                    </p>
+                  </Link>
+                  <Badge tone={active && c.drafts.length > 0 ? "accent" : "neutral"}>
+                    {active && c.drafts.length > 0 ? "Active" : "No posts yet"}
+                  </Badge>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {Object.entries(counts).map(([status, n]) => (
+                    <Badge key={status} tone={status === "published" ? "success" : status === "scheduled" ? "accent" : "neutral"}>
+                      {n} {status}
+                    </Badge>
+                  ))}
+                  <form action={deleteCampaign} className="ml-auto">
+                    <input type="hidden" name="id" value={c.id} />
+                    <button
+                      type="submit"
+                      aria-label={`Delete campaign ${c.name}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted hover:bg-danger/10 hover:text-danger"
+                    >
+                      ✕
+                    </button>
+                  </form>
+                </div>
+              </Card>
+            );
+          })}
         </div>
+
         <p className="text-xs text-text-faint">
-          Demo data — publishing integrations are not connected, so nothing shows
-          as published unless it actually happened.
+          Campaigns group drafts only — Draftly never marks anything as
+          published unless a real publishing action succeeded.
         </p>
       </div>
     </>

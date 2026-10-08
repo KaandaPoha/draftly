@@ -1,29 +1,65 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, Sparkles, Lightbulb, CalendarDays } from "lucide-react";
 import { PageHeader, SectionHeader, StatTile, Badge, Card } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
-import { demoData } from "@/lib/demo-data";
+import { prisma } from "@/lib/prisma";
+import { recommend, suggestedSlots } from "@/lib/recommendations";
 
 export default async function DashboardPage() {
-  const d = demoData;
   const user = await getCurrentUser();
-  const firstName = user?.name?.split(" ")[0] ?? "there";
+  if (!user) redirect("/login");
+
+  const [profileCount, campaignCount, drafts, preferences] = await Promise.all([
+    prisma.brandProfile.count({ where: { userId: user.id, isTemporary: false } }),
+    prisma.campaign.count({ where: { userId: user.id } }),
+    prisma.contentDraft.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.userPreferences.findUnique({ where: { userId: user.id } }),
+  ]);
+
+  const firstName = user.name?.split(" ")[0] ?? "there";
+  const scheduledCount = drafts.filter((d) => d.status === "scheduled").length;
+
+  const recommendations = recommend({
+    goals: preferences?.goals ?? "",
+    platforms: preferences?.platforms ?? "Instagram",
+    profiles: await prisma.brandProfile
+      .findMany({
+        where: { userId: user.id, isTemporary: false },
+        select: { name: true, niche: true, audience: true },
+      })
+      .then((ps) => ps.map((p) => ({ ...p, audience: p.audience ?? null }))),
+    drafts: drafts.map((d) => ({
+      title: d.title,
+      platform: d.platform,
+      goal: d.goal,
+      format: d.format,
+      isPersonalized: d.isPersonalized,
+      createdAt: d.createdAt,
+    })),
+  });
+
+  const slots = suggestedSlots((preferences?.platforms ?? "Instagram").split(","));
 
   return (
     <>
       <PageHeader
         title={`Good morning, ${firstName}`}
-        subtitle="Here's where your content stands this week. Sample data is shown until you create drafts."
+        subtitle="Your content command center — drafts, campaigns, and what to make next."
       />
 
       <div className="mx-auto flex flex-col gap-10 px-5 py-8 md:px-10">
-        {/* Key numbers */}
-        <section aria-label="This week at a glance">
+        {/* Key numbers — real counts from your data */}
+        <section aria-label="Your content at a glance">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatTile label="Drafts" value={String(d.stats.drafts)} hint="Created this week" />
-            <StatTile label="Profiles" value={String(d.stats.profiles)} hint="Brand voices saved" />
-            <StatTile label="Campaigns" value={String(d.stats.campaigns)} hint="Active right now" />
-            <StatTile label="Scheduled" value={String(d.stats.scheduled)} hint="Awaiting publish" />
+            <StatTile label="Drafts" value={String(drafts.length)} hint="Most recent 10 shown below" />
+            <StatTile label="Profiles" value={String(profileCount)} hint="Brand voices saved" />
+            <StatTile label="Campaigns" value={String(campaignCount)} hint="Grouping your drafts" />
+            <StatTile label="Scheduled" value={String(scheduledCount)} hint="On the calendar" />
           </div>
         </section>
 
@@ -56,72 +92,97 @@ export default async function DashboardPage() {
         </section>
 
         <div className="grid gap-10 lg:grid-cols-[1.6fr_1fr]">
-          {/* Recent drafts */}
+          {/* Recent drafts — real */}
           <section aria-label="Recent drafts" className="flex flex-col gap-4">
             <SectionHeader
               title="Recent drafts"
-              subtitle="Your latest generated content"
+              subtitle="Your latest saved work"
               action={
                 <Link
-                  href="/campaigns"
+                  href="/drafts"
                   className="text-sm font-medium text-accent hover:text-accent-strong"
                 >
                   View all
                 </Link>
               }
             />
-            <div className="flex flex-col gap-3">
-              {d.recentDrafts.map((draft) => (
-                <Card key={draft.id} className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="font-medium">{draft.title}</h3>
-                    <Badge tone={draft.status === "ready" ? "success" : "neutral"}>
-                      {draft.status === "ready" ? "Ready for review" : "Draft"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-text-muted">{draft.excerpt}</p>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <Badge tone="accent">{draft.platform}</Badge>
-                    <Badge>{draft.profile}</Badge>
-                    <span className="ml-auto font-mono text-xs text-text-faint">
-                      {draft.date}
-                    </span>
-                  </div>
-                </Card>
-              ))}
-            </div>
+            {drafts.length === 0 ? (
+              <Card className="text-sm text-text-muted">
+                No drafts yet.{" "}
+                <Link href="/create" className="text-accent">Create your first one</Link> — it takes about a minute.
+              </Card>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {drafts.slice(0, 5).map((draft) => (
+                  <Card key={draft.id} className="flex flex-col gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <Link href={`/drafts/${draft.id}`} className="font-medium hover:text-accent">
+                        {draft.title}
+                      </Link>
+                      <Badge tone={draft.status === "published" ? "success" : draft.status === "scheduled" ? "accent" : "neutral"}>
+                        {draft.status}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Badge tone="accent">{draft.platform}</Badge>
+                      {draft.isPersonalized ? (
+                        <Badge>Personalized</Badge>
+                      ) : (
+                        <Badge tone="warning">Generic</Badge>
+                      )}
+                      <span className="ml-auto font-mono text-xs text-text-faint">
+                        {draft.createdAt.toLocaleDateString()}
+                      </span>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </section>
 
-          {/* Side column */}
+          {/* Side column — real recommendations */}
           <div className="flex flex-col gap-10">
             <section aria-label="Recommended for you" className="flex flex-col gap-4">
               <SectionHeader
                 title="Recommended for you"
-                subtitle="AI-generated ideas"
+                subtitle="Based on your goals, profiles, and drafts"
               />
               <div className="flex flex-col gap-3">
-                {d.recommendations.map((rec) => (
-                  <Card key={rec.title} className="flex gap-3">
-                    <Lightbulb size={18} className="mt-0.5 shrink-0 text-accent2" aria-hidden />
-                    <div>
-                      <h3 className="text-sm font-medium">{rec.title}</h3>
-                      <p className="mt-1 text-xs leading-relaxed text-text-muted">
-                        {rec.detail}
-                      </p>
+                {recommendations.map((rec) => (
+                  <Card key={rec.title} className="flex flex-col gap-2">
+                    <div className="flex gap-3">
+                      <Lightbulb size={18} className="mt-0.5 shrink-0 text-accent2" aria-hidden />
+                      <div>
+                        <h3 className="text-sm font-medium">{rec.title}</h3>
+                        <p className="mt-1 text-xs leading-relaxed text-text-muted">
+                          {rec.detail}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pl-8">
+                      <span className="text-[11px] text-text-faint">{rec.reason}</span>
+                      {rec.cta && (
+                        <Link
+                          href={rec.cta.href}
+                          className="shrink-0 text-xs font-medium text-accent hover:text-accent-strong"
+                        >
+                          {rec.cta.label} →
+                        </Link>
+                      )}
                     </div>
                   </Card>
                 ))}
               </div>
               <p className="text-xs text-text-faint">
-                Suggestions are AI-generated estimates based on your profile —
+                Suggestions are generated from your saved goals and history —
                 not real-time trend data.
               </p>
             </section>
 
-            <section aria-label="Upcoming schedule" className="flex flex-col gap-4">
+            <section aria-label="This week's windows" className="flex flex-col gap-4">
               <SectionHeader
-                title="This week's plan"
-                subtitle="Tentative schedule"
+                title="Suggested windows"
+                subtitle="Estimates for your platforms"
                 action={
                   <Link
                     href="/planner"
@@ -132,11 +193,11 @@ export default async function DashboardPage() {
                 }
               />
               <Card className="flex flex-col gap-3">
-                {d.upcoming.map((slot) => (
-                  <div key={slot.when} className="flex items-center gap-3 text-sm">
+                {slots.map((s) => (
+                  <div key={s.when} className="flex items-center gap-3 text-sm">
                     <CalendarDays size={15} className="shrink-0 text-text-faint" aria-hidden />
-                    <span className="font-mono text-xs text-text-faint">{slot.when}</span>
-                    <span className="ml-auto text-right text-text-muted">{slot.what}</span>
+                    <span className="font-mono text-xs text-text-faint">{s.when}</span>
+                    <span className="ml-auto text-right text-text-muted">{s.platform}</span>
                   </div>
                 ))}
               </Card>
