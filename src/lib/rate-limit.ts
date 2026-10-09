@@ -46,3 +46,11 @@ setInterval(() => {
     if (v.resetAt < now) buckets.delete(k);
   });
 }, 120_000).unref?.();
+
+/**
+ * Test-only: clear every bucket so rate-limit tests start from a known state.
+ * Not exported from any public surface — only the test resolver maps it in.
+ */
+export function __resetRateLimit(): void {
+  buckets.clear();
+}

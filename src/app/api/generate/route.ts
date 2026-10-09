@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, clientKey } from "@/lib/rate-limit";
 import { generateContent } from "@/lib/ai";
 
 const schema = z.object({
@@ -37,6 +38,17 @@ const schema = z.object({
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  // Rate limit: generation costs real provider money, so it is capped tighter
+  // than login (10/min). 5 drafts per minute is far above any human pace —
+  // the point is to stop a script from burning the provider's daily quota.
+  const rl = rateLimit(clientKey(request, "generate-text"), 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Too many generations — try again in ${rl.retryAfterSec}s.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
+  }
 
   const body = await request.json().catch(() => null);
   const parsed = schema.safeParse(body);

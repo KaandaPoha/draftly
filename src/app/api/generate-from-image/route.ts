@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { rateLimit, clientKey } from "@/lib/rate-limit";
 import { generateContentFromImage } from "@/lib/ai";
 import { validateImage, toDataUrl, MAX_IMAGE_BYTES, ALLOWED_IMAGE_TYPES } from "@/lib/image-input";
 
@@ -48,12 +49,26 @@ const selectionsSchema = z.object({
   profileId: z.string().optional().nullable(),
 });
 
-/** 6 MB body cap: the 5 MB image plus form fields, with headroom. */
+/** 6 MB body cap for the JSON/API path: the 5 MB image plus form fields.
+ *  NOTE: Next.js does not read this export — it exists for documentation.
+ *  The server-action path's limit is set in next.config.ts
+ *  (experimental.serverActions.bodySizeLimit); this API route enforces its own
+ *  limit through the formData() parse + file.size check below. */
 export const bodySizeLimit = MAX_IMAGE_BYTES + 1024 * 1024;
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  // Rate limit: image generation is the most expensive call in the app
+  // (a multimodal Gemini request), so it is capped at 3 per minute per IP.
+  const rl = rateLimit(clientKey(request, "generate-image"), 3, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Too many generations — try again in ${rl.retryAfterSec}s.` },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } }
+    );
+  }
 
   let form: FormData;
   try {
@@ -72,16 +87,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Choose an image to continue." }, { status: 400 });
   }
 
-  const parsed = selectionsSchema.safeParse(
-    rawSelections ? JSON.parse(String(rawSelections)) : null
-  );
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0]?.message ?? "Invalid selections" },
-      { status: 400 }
-    );
+  let selections: {
+    instructions: string;
+    platform: string;
+    goal: string;
+    format: string;
+    audience?: string | null;
+    tone?: string | null;
+    language?: string | null;
+    profileId?: string | null;
+  } | null = null;
+  if (rawSelections) {
+    try {
+      const parsed = selectionsSchema.safeParse(JSON.parse(String(rawSelections)));
+      if (!parsed.success) {
+        return NextResponse.json(
+          { error: parsed.error.issues[0]?.message ?? "Invalid selections" },
+          { status: 400 }
+        );
+      }
+      selections = parsed.data;
+    } catch {
+      // Malformed JSON (not just schema-invalid) must 400, not 500.
+      return NextResponse.json({ error: "Invalid selections." }, { status: 400 });
+    }
   }
-  const selections = parsed.data;
+  if (!selections) {
+    return NextResponse.json({ error: "Choose an image to continue." }, { status: 400 });
+  }
 
   // Early declared-type rejection before reading bytes.
   const declared = (file.type || "").toLowerCase();

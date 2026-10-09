@@ -158,6 +158,32 @@ describe("provider transport (lib/llm.ts)", () => {
     });
   });
 
+  it("a RESOURCE_EXHAUSTED 429 is classified as quota, not rate_limit", async () => {
+    await withProvider(async () => {
+      install(() => ({
+        status: 429,
+        body: JSON.stringify({ error: { status: "RESOURCE_EXHAUSTED", message: "Quota exceeded" } }),
+      }));
+      await assert.rejects(complete("s", "u"), (err: LlmError) => {
+        assert.equal(err.code, "quota");
+        // The friendly text must not tell the user to retry immediately.
+        assert.doesNotMatch(err.friendly, /rate-limit/i);
+        assert.match(err.friendly, /RESOURCE_EXHAUSTED|quota/i);
+        return true;
+      });
+    });
+  });
+
+  it("a plain 429 without RESOURCE_EXHAUSTED stays rate_limit (retryable)", async () => {
+    await withProvider(async () => {
+      install(() => ({ status: 429, body: JSON.stringify({ error: "slow down" }) }));
+      await assert.rejects(complete("s", "u"), (err: LlmError) => {
+        assert.equal(err.code, "rate_limit");
+        return true;
+      });
+    });
+  });
+
   it("non-JSON provider output fails safely as bad_response", async () => {
     await withProvider(async () => {
       install(() => ({ status: 200, body: "<html>gateway error</html>" }));

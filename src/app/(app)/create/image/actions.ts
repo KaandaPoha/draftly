@@ -13,8 +13,10 @@
  * honest: nothing pretends to have succeeded.
  */
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { generateContentFromImage } from "@/lib/ai";
+import { submitToken, once } from "@/lib/submit-guard";
 import { validateImage, toDataUrl, MAX_IMAGE_BYTES, ALLOWED_IMAGE_TYPES } from "@/lib/image-input";
 import { PLATFORMS, GOALS, FORMATS } from "@/lib/form-options";
 
@@ -104,6 +106,13 @@ export async function generateFromImageAction(formData: FormData): Promise<void>
     });
   }
 
+  // A rapid double click must not generate and save twice (same guard as the
+  // text wizard — each run is a real provider call).
+  const token = submitToken("create-image-generate", `${user.id}|${instructions}|${platform}|${format}|${goal}`);
+  if (!once(token)) {
+    redirect(`/create/image?error=${encodeURIComponent("A generation with these details just ran. Wait for it to finish or change something before retrying.")}`);
+  }
+
   const result = await generateContentFromImage({
     selections: {
       // The fallback generator still needs an `idea`; it is only used for
@@ -142,6 +151,8 @@ export async function generateFromImageAction(formData: FormData): Promise<void>
   if (!result.ok) {
     fail(result.error);
   }
+  // The guard stays consumed on failure so a genuine retry (new window or a
+  // changed payload) is never mistaken for a double submit.
 
   // Persist through the existing draft system. The uploaded image itself is
   // NOT written to disk — nothing about the upload survives the request

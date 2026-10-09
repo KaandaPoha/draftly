@@ -40,3 +40,10 @@ export function once(token: string): boolean {
   recent.set(token, exp);
   return true;
 }
+
+/** Test-only: clear every remembered token so guard tests start from a known
+ *  state. Not exported from any public surface — only the test resolver maps
+ *  it in. */
+export function __reset(): void {
+  recent.clear();
+}

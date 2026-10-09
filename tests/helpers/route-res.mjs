@@ -25,12 +25,18 @@ const SUFFIXES = [".ts", ".tsx", "/index.ts", "/index.tsx", ".js", ".json"];
 const NEXT_FILES = {
   "next/server": `${ROOT}/node_modules/next/server.js`,
   "next/headers": `${ROOT}/node_modules/next/headers.js`,
+  // Server actions call redirect() from next/navigation; the CJS build throws
+  // a digest-encoded error that tests can catch to learn the redirect URL.
+  "next/navigation": `${ROOT}/node_modules/next/navigation.js`,
 };
 
 // Boundaries faked for tests. Everything else resolves to production code.
 const BOUNDARIES = {
   "@/lib/auth": `${ROOT}/tests/helpers/stub-auth.ts`,
   "@/lib/prisma": `${ROOT}/tests/helpers/stub-prisma.ts`,
+  "@/lib/rate-limit": `${ROOT}/tests/helpers/stub-rate-limit.ts`,
+  "@/lib/submit-guard": `${ROOT}/src/lib/submit-guard.ts`,
+  "@/lib/ai": `${ROOT}/tests/helpers/stub-ai.ts`,
 };
 
 export async function resolve(specifier, context, nextResolve) {

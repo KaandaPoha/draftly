@@ -27,6 +27,7 @@ export class LlmError extends Error {
       | "not_configured"
       | "auth"
       | "rate_limit"
+      | "quota"
       | "timeout"
       | "bad_response"
       | "network"
@@ -44,6 +45,8 @@ export class LlmError extends Error {
         return "The AI provider rejected the API key. Check AI_API_KEY and try again.";
       case "rate_limit":
         return "The AI provider is rate-limiting requests right now. Draftly used its built-in generator instead.";
+      case "quota":
+        return "The AI provider reported RESOURCE_EXHAUSTED — its daily quota is used up. Retrying now cannot succeed; wait for the quota to reset.";
       case "timeout":
         return "The AI provider took too long to respond. Draftly used its built-in generator instead.";
       case "bad_response":
@@ -112,7 +115,16 @@ async function fetchWithTimeout(url: string, init: RequestInit): Promise<Respons
 
 function classify(status: number, body: string): LlmError {
   if (status === 401 || status === 403) return new LlmError(`Auth failed: ${body}`, "auth");
-  if (status === 429) return new LlmError(`Rate limited: ${body}`, "rate_limit");
+  if (status === 429) {
+    // Providers use 429 for two very different problems: a short-term rate
+    // limit (retry soon) and an exhausted daily quota. Gemini signals the
+    // latter with RESOURCE_EXHAUSTED in the body — conflating the two tells
+    // the user to retry when retrying cannot possibly succeed.
+    if (/RESOURCE_EXHAUSTED/i.test(body)) {
+      return new LlmError(`Quota exhausted: ${body}`, "quota");
+    }
+    return new LlmError(`Rate limited: ${body}`, "rate_limit");
+  }
   return new LlmError(`Provider error ${status}: ${body}`, "bad_response");
 }
 

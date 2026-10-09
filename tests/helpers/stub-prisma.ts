@@ -16,6 +16,7 @@ type Probe = () => DraftRow;
 let draft: DraftRow = null;
 let probe: Probe | null = null;
 let lastWhere: Record<string, unknown> | null = null;
+let lastCreate: Record<string, unknown> | null = null;
 
 export function __setDraft(row: DraftRow): void {
   draft = row;
@@ -30,6 +31,12 @@ export function __reset(): void {
   draft = null;
   probe = null;
   lastWhere = null;
+  lastCreate = null;
+}
+
+/** The data handed to the most recent prisma.contentDraft.create call. */
+export function __lastCreate(): Record<string, unknown> | null {
+  return lastCreate;
 }
 
 /** The where clause of the most recent query, for scoping assertions. */
@@ -42,6 +49,18 @@ export const prisma = {
     async findFirst({ where }: { where?: Record<string, unknown> } = {}): Promise<DraftRow> {
       lastWhere = where ?? null;
       return probe ? probe() : draft;
+    },
+    /** Fake for create — records the last create and returns a plausible row. */
+    async create({ data }: { data?: Record<string, unknown> } = {}): Promise<DraftRow> {
+      lastCreate = data ?? null;
+      return { id: "new-draft", ...(data ?? {}) } as DraftRow;
+    },
+  },
+  /** brandProfile fake — the image action looks up the user's profile. */
+  brandProfile: {
+    async findFirst({ where }: { where?: Record<string, unknown> } = {}): Promise<DraftRow> {
+      lastWhere = where ?? null;
+      return null;
     },
   },
 };
