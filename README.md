@@ -45,10 +45,32 @@ real database, run `prisma migrate deploy`) plus a migration. Until that
 happens, only deploy to an environment where the SQLite file persists — a
 host with a mounted persistent volume, or a long-lived single server.
 
+### Vercel demo mode (what the current deploy does)
+
+Vercel's serverless filesystem is read-only except `/tmp`, and SQLite cannot
+open a database on a read-only path. For a **demo** deploy, `src/lib/prisma.ts`
+detects the Vercel runtime (`VERCEL="1"`) and:
+
+1. copies the bundled database (`prisma/dev.db`, included in the build via
+   `outputFileTracingIncludes` in `next.config.ts`) into `/tmp` on first use, and
+2. opens that copy for the life of the warm instance.
+
+**What this means in practice — please don't mistake this for production:**
+
+- Signing up, onboarding, creating drafts and campaigns all work.
+- **Every cold start resets the database** to the bundled snapshot.
+- Data lives only as long as a warm instance (minutes to hours).
+- Signups made on the demo are not durable.
+
+**For real use, switch to hosted Postgres** (Neon, Supabase, Railway) before
+onboarding real users. That is the only change needed; no application code
+assumes SQLite.
+
 ### AI provider keys
 
-`AI_API_KEY` is read server-side only and is never sent to the browser. Copy
-`.env.example` to `.env` and set values there — never commit a real `.env`.
+`AI_API_KEY` is read server-side only and is never sent to the browser. On
+Vercel, set it under Project → Settings → Environment Variables (never commit
+it). Locally, copy `.env.example` to `.env` and set values there.
 
 ## Deploy on Vercel
 
