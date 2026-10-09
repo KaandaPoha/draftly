@@ -142,6 +142,11 @@ AI_BASE_URL=https://api.openai.com/v1`}
             session. Sign-up and login are rate-limited, and every page here is
             private to your account.
           </p>
+          <p className="text-xs text-text-faint">
+            Want to change what Draftly recommends? Edit your goals and platforms
+            on the <strong>Brand Profiles</strong> page — those drive the content
+            and drafts, not this tab.
+          </p>
         </Card>
 
         <Card className="flex flex-col gap-2">

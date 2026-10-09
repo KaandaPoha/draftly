@@ -32,6 +32,7 @@ function Dropdown({
   label,
   placeholder,
   required = false,
+  hint,
 }: {
   name: string;
   options: readonly (string | { value: string; label: string })[];
@@ -39,6 +40,7 @@ function Dropdown({
   label: string;
   placeholder?: string;
   required?: boolean;
+  hint?: string;
 }) {
   return (
     <label className="flex flex-col gap-1.5 text-sm">
@@ -56,6 +58,7 @@ function Dropdown({
           return <option key={v} value={v}>{l}</option>;
         })}
       </select>
+      {hint && <span className="text-xs leading-relaxed text-text-faint">{hint}</span>}
     </label>
   );
 }
@@ -135,7 +138,7 @@ export default async function CreatePage({
             <h2 className="font-display font-semibold">What do you want to create?</h2>
             <p className="text-sm text-text-muted">
               Anything you want to launch, promote, announce, or explain — a
-              sentence is enough.
+              sentence is enough. No wrong answers; you can refine later.
             </p>
             <form action={advance} className="flex flex-col gap-4">
               {hidden(state, ["idea"])}
@@ -151,6 +154,16 @@ export default async function CreatePage({
                 className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
               />
               <VoiceInput targetId="idea-input" label="Dictate your idea" />
+              <details className="rounded-lg border border-line bg-surface-2">
+                <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-medium text-text-muted hover:text-text [&::-webkit-details-marker]:hidden">
+                  Stuck? Tap an example to copy it into the box
+                </summary>
+                <ul className="flex flex-col gap-1.5 border-t border-line px-4 py-3 text-xs text-text-muted">
+                  <li>• &quot;Launching a protein drink for busy college students.&quot;</li>
+                  <li>• &quot;Announcing a weekend sale on handmade candles.&quot;</li>
+                  <li>• &quot;Explaining how small businesses can start email marketing.&quot;</li>
+                </ul>
+              </details>
               <div className="flex justify-end">
                 <PrimaryButton type="submit">Continue →</PrimaryButton>
               </div>
@@ -251,6 +264,7 @@ export default async function CreatePage({
                   value={state.audienceInterests}
                   options={INTERESTS}
                   placeholder="Pick or type below"
+                  hint="What this audience cares about — it steers the content's angle and examples."
                 />
               </div>
               <label className="flex flex-col gap-1.5 text-sm">
@@ -288,6 +302,7 @@ export default async function CreatePage({
                 value={state.platform}
                 options={PLATFORMS}
                 required
+                hint="Instagram favors short hooks and hashtags; LinkedIn favors longer, professional posts. Pick where your audience actually is."
               />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
@@ -309,6 +324,7 @@ export default async function CreatePage({
                 value={state.goal}
                 options={GOALS}
                 required
+                hint="Engagement goals add a question or poll; sales goals add a clear CTA. Not sure? Pick Engagement — it suits most content."
               />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
@@ -334,6 +350,7 @@ export default async function CreatePage({
                 value={state.format}
                 options={FORMATS}
                 required
+                hint="Captions are the fastest to publish. Short-form video scripts give you a reel; visual formats also produce an image or storyboard."
               />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />

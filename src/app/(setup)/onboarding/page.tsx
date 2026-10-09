@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { selectRole, selectGoals, selectPlatforms, savePreferences } from "./actions";
-import { ROLES, GOALS, PLATFORMS, LANGUAGES, TONES } from "@/lib/onboarding-options";
+import { ROLES, ROLE_HINTS, GOALS, PLATFORMS, LANGUAGES, TONES } from "@/lib/onboarding-options";
 import { cn } from "@/lib/utils";
 
 /**
@@ -62,16 +62,19 @@ export default async function OnboardingPage({
           <p className="mt-1 text-sm text-text-muted">
             This shapes what Draftly recommends for you.
           </p>
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-col gap-2">
             {ROLES.map((r) => (
-              <form key={r} action={selectRole}>
-                <input type="hidden" name="role" value={r} />
+              <form key={r} action={selectRole} className="contents">
                 <button
                   type="submit"
-                  className="rounded-full border border-line bg-surface-2 px-4 py-2 text-sm text-text-muted transition-colors hover:border-accent hover:text-text"
+                  className="group rounded-xl border border-line bg-surface-2 px-4 py-3 text-left transition-colors hover:border-accent"
                 >
-                  {r}
+                  <span className="block text-sm font-medium text-text">{r}</span>
+                  <span className="mt-0.5 block text-xs text-text-faint group-hover:text-text-muted">
+                    {ROLE_HINTS[r]}
+                  </span>
                 </button>
+                <input type="hidden" name="role" value={r} />
               </form>
             ))}
           </div>

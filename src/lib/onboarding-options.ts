@@ -10,6 +10,18 @@ export const ROLES = [
   "Other",
 ] as const;
 
+/** One plain-language line per role so the first onboarding question is
+ *  answerable without guessing what each option means. */
+export const ROLE_HINTS: Record<(typeof ROLES)[number], string> = {
+  "Influencer / Creator": "You make content for an audience — reels, posts, videos.",
+  "Brand / Business": "A company or product with a marketing voice.",
+  Startup: "A young company finding its voice and first customers.",
+  "Small Business": "A local shop or service promoting what you sell.",
+  "Personal Brand": "Building a name around yourself — coaching, portfolio, thought leadership.",
+  "Individual / Student": "Posting for growth, a portfolio, or just for fun.",
+  Other: "Something else — you can describe it in your profile later.",
+};
+
 export const GOALS = [
   "Increase reach",
   "Increase engagement",

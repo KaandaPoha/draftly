@@ -96,6 +96,11 @@ export default async function AssistantPage({
               placeholder="e.g. What should my brand post this week?"
               className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
+            <p className="text-xs text-text-faint">
+              One question is enough — the assistant reads your profiles, goals
+              and recent drafts for context. Tap a suggestion below to send it
+              without typing.
+            </p>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="submit"
@@ -117,7 +122,7 @@ export default async function AssistantPage({
           {!active && (
             <div className="flex flex-col gap-2">
               <span className="text-xs font-medium uppercase tracking-wider text-text-faint">
-                Try asking
+                Or tap a question to send it instantly
               </span>
               <div className="flex flex-wrap gap-2">
                 {STARTERS.map((s) => (

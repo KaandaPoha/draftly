@@ -225,19 +225,23 @@ export function SecondaryButton({
 }
 
 /** Native <select> dropdown with its label — works without client JS.
- *  `options` may be plain strings (value = label) or {value, label} pairs. */
+ *  `hint` adds one line of plain-language help under the label so users
+ *  never have to guess what a field wants. `options` may be plain strings
+ *  (value = label) or {value, label} pairs. */
 export function DropdownField({
   label,
   name,
   options,
   defaultValue,
   required = false,
+  hint,
 }: {
   label: string;
   name: string;
   options: readonly (string | { value: string; label: string })[];
   defaultValue?: string;
   required?: boolean;
+  hint?: string;
 }) {
   return (
     <label className="flex flex-col gap-1 text-xs text-text-faint">
@@ -260,6 +264,72 @@ export function DropdownField({
           )
         )}
       </select>
+      {hint && <span className="text-[11px] leading-relaxed text-text-faint">{hint}</span>}
+    </label>
+  );
+}
+
+/**
+ * Server-rendered suggestion field for free text: an <input> wired to a
+ * native <datalist> so the browser offers one-click suggestions while still
+ * accepting anything the user types. Works without client JS — the datalist
+ * is static markup. (<textarea> has no native datalist support, so multi-line
+ * fields fall back to a plain textarea with a strong placeholder.)
+ */
+export function SuggestField({
+  label,
+  name,
+  suggestions,
+  placeholder,
+  hint,
+  textarea = false,
+  rows = 3,
+  required = false,
+  defaultValue,
+}: {
+  label: string;
+  name: string;
+  suggestions: readonly string[];
+  placeholder?: string;
+  hint?: string;
+  textarea?: boolean;
+  rows?: number;
+  required?: boolean;
+  defaultValue?: string;
+}) {
+  const listId = `suggestions-${name.replace(/[^a-z0-9-]/gi, "-")}`;
+  const common =
+    "w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-text placeholder:text-text-faint";
+  return (
+    <label className="flex flex-col gap-1 text-xs text-text-faint">
+      {label}
+      {textarea ? (
+        <textarea
+          name={name}
+          rows={rows}
+          required={required}
+          defaultValue={defaultValue}
+          placeholder={placeholder}
+          className={cn(common, "resize-y font-mono text-[13px] leading-relaxed")}
+        />
+      ) : (
+        <input
+          name={name}
+          required={required}
+          defaultValue={defaultValue}
+          placeholder={placeholder}
+          list={listId}
+          className={common}
+        />
+      )}
+      {textarea ? null : (
+        <datalist id={listId}>
+          {suggestions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+      )}
+      {hint && <span className="text-[11px] leading-relaxed text-text-faint">{hint}</span>}
     </label>
   );
 }

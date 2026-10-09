@@ -58,6 +58,9 @@ export default async function CampaignsPage({
                   placeholder="e.g. Protein drink launch"
                   className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
                 />
+                <span className="text-xs text-text-faint">
+                  A short label you&apos;ll recognize — e.g. a product launch or festival series.
+                </span>
               </label>
               <label className="flex flex-col gap-1.5 text-sm">
                 Start date
@@ -66,6 +69,7 @@ export default async function CampaignsPage({
                   type="date"
                   className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
                 />
+                <span className="text-xs text-text-faint">Optional — when the campaign goes live.</span>
               </label>
               <label className="flex flex-col gap-1.5 text-sm">
                 End date
@@ -74,6 +78,7 @@ export default async function CampaignsPage({
                   type="date"
                   className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
                 />
+                <span className="text-xs text-text-faint">Optional — leave blank for an ongoing campaign.</span>
               </label>
             </div>
             <button
