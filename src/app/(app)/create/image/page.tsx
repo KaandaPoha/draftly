@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PageHeader, Card, PrimaryButton, Badge, DropdownField } from "@/components/ui";
 import { ImagePicker } from "@/components/image-picker";
+import { VoiceInput } from "@/components/voice";
 import { aiConfigured } from "@/lib/ai";
 import { MAX_IMAGE_BYTES } from "@/lib/image-input";
 import { PLATFORMS, GOALS, FORMATS, TONES, LANGUAGES } from "@/lib/form-options";
@@ -71,6 +72,7 @@ export default async function ImageToContentPage({
             <label className="flex flex-col gap-1 text-xs text-text-faint">
               Extra instructions (what to do with the image)
               <textarea
+                id="image-instructions"
                 name="instructions"
                 required
                 rows={3}
@@ -78,7 +80,11 @@ export default async function ImageToContentPage({
                 placeholder="e.g. Write a launch caption for this product photo — make it funny, target college students, focus on the benefits."
                 className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-text outline-none focus:border-accent"
               />
+              <span className="text-[11px] leading-relaxed text-text-faint">
+                Say what to make from the image, plus any tone or audience notes.
+              </span>
             </label>
+            <VoiceInput targetId="image-instructions" label="Dictate instructions" />
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <DropdownField
@@ -114,12 +120,14 @@ export default async function ImageToContentPage({
               Audience (optional — describe who this is for)
               <input
                 type="text"
+                id="image-audience"
                 name="audience"
                 maxLength={500}
                 placeholder="e.g. college students in metros who hit the gym"
                 className="h-10 w-full rounded-lg border border-line bg-surface-2 px-3 text-sm text-text outline-none focus:border-accent"
               />
             </label>
+              <VoiceInput targetId="image-audience" label="Dictate audience" />
           </Card>
 
           {error && (

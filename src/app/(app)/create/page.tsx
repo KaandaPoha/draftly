@@ -248,6 +248,7 @@ export default async function CreatePage({
                       <option key={a} value={a}>{a}</option>
                     ))}
                   </select>
+                  <span className="text-xs text-text-faint">Optional — skip if the content isn&apos;t age-specific.</span>
                 </label>
                 <label className="flex flex-col gap-1.5 text-sm">
                   Location
@@ -257,6 +258,7 @@ export default async function CreatePage({
                     placeholder="e.g. India, metros"
                     className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
                   />
+                  <span className="text-xs text-text-faint">Optional — a city, country, or “global”.</span>
                 </label>
                 <Dropdown
                   name="audienceInterests"
@@ -271,13 +273,16 @@ export default async function CreatePage({
                 Other interests or details{" "}
                 <span className="text-text-faint">(optional)</span>
                 <input
+                  id="audience-other-input"
                   name="audienceInterestsOther"
                   defaultValue={state.audienceInterestsOther}
                   placeholder="e.g. hostel life, late-night study, street food"
                   maxLength={200}
                   className="h-10 rounded-lg border border-line bg-surface-2 px-3 outline-none focus:border-accent"
                 />
+                <span className="text-xs text-text-faint">Hobbies, habits, or in-jokes the draft can lean on.</span>
               </label>
+              <VoiceInput targetId="audience-other-input" label="Dictate audience details" />
               <div className="flex items-center justify-between">
                 <BackForm state={state} step={step} />
                 <PrimaryButton type="submit">Continue →</PrimaryButton>

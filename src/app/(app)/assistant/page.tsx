@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { MessageSquare, Info, Plus, Trash2, ArrowUpRight, Sparkles } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { VoiceInput } from "@/components/voice";
 import { PageHeader, Card, Badge } from "@/components/ui";
 import { aiConfigured } from "@/lib/llm";
 import { sendMessage, deleteConversation, createIdea } from "./actions";
@@ -96,6 +97,7 @@ export default async function AssistantPage({
               placeholder="e.g. What should my brand post this week?"
               className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
+              <VoiceInput targetId="message" label="Dictate message" />
             <p className="text-xs text-text-faint">
               One question is enough — the assistant reads your profiles, goals
               and recent drafts for context. Tap a suggestion below to send it

@@ -36,6 +36,29 @@ export type QualityReport = {
 const words = (s: string | null | undefined) =>
   (s ?? "").trim().split(/\s+/).filter(Boolean).length;
 
+/**
+ * Stock AI phrases — if any of these survive into a draft, the copy reads as
+ * machine-generated rather than written. The list mirrors the hard bans in
+ * src/lib/prompt.ts so the evaluator catches what the prompt forbids.
+ */
+const GENERIC_PATTERNS: Array<[RegExp, string]> = [
+  [/in today'?s (fast-?paced|modern|digital) world/i, "the classic AI opener “in today's … world”"],
+  [/unlock(ing)? the power of/i, "“unlock the power of”"],
+  [/game-?changer/i, "“game-changer”"],
+  [/\bdive into\b/i, "“dive into”"],
+  [/elevate (your|the)/i, "“elevate your/the …”"],
+  [/take it to the next level/i, "“take it to the next level”"],
+  [/it'?s not just .{3,60},? it'?s\b/i, "the “it's not just X, it's Y” construction"],
+  [/in conclusion\b/i, "“in conclusion”"],
+  [/revolutioni[sz]e/i, "“revolutionize”"],
+  [/seamless(ly)? integrat/i, "“seamlessly integrate”"],
+  [/cutting-?edge/i, "“cutting-edge”"],
+  [/the (world|landscape) of\b/i, "“the world/landscape of …”"],
+];
+
+/** Emoji used as decoration rather than punctuation. */
+const EMOJI_RE = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu;
+
 const CAPTION_LIMITS: Record<string, number> = {
   X: 280,
   Facebook: 2000,
@@ -238,6 +261,44 @@ export function evaluateDraft(
             why: "One clear action, with no competing asks.",
           }
     );
+  }
+
+  /* ---- specificity (generic-AI phrase scan) ---- */
+  const genericHits = GENERIC_PATTERNS.filter(([re]) => re.test(prose)).map(([, label]) => label);
+  if (genericHits.length > 0) {
+    dims.push({
+      key: "specificity",
+      label: "Specificity",
+      score: 1,
+      why: `The copy leans on generic AI phrasing: ${genericHits.slice(0, 2).join(", ")}.`,
+      fix: "Swap the stock phrases for something only this brand would say.",
+      action: "shorter",
+    });
+  } else {
+    dims.push({
+      key: "specificity",
+      label: "Specificity",
+      score: 3,
+      why: "No stock AI phrasing — the lines read like they were written, not generated.",
+    });
+  }
+
+  /* ---- emoji restraint (feed platforms; LinkedIn is deliberately dry) ---- */
+  if (ctx.platform !== "LinkedIn") {
+    const emojiCount = (prose.match(EMOJI_RE) ?? []).length;
+    const proseWords = Math.max(1, words(prose));
+    if (emojiCount > 6 || (emojiCount >= 3 && proseWords < 60)) {
+      dims.push({
+        key: "emoji",
+        label: "Emoji restraint",
+        score: 1,
+        why:
+          emojiCount > 6
+            ? `${emojiCount} emoji is more than a feed post needs — it reads as spam rather than style.`
+            : "Emoji clusters in a short post pull the eye away from the words.",
+        fix: "Keep at most one or two, in the hook or the CTA.",
+      });
+    }
   }
 
   /* ---- brand voice consistency ---- */
